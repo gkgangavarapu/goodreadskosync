@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 luarocks zip
+          sudo luarocks install luacheck
+
+      - name: Lint
+        continue-on-error: true
+        run: make check LUACHECK=luacheck
+
+      - name: Test
+        run: make test LUA=lua5.1
+
+      - name: Package
+        run: make package
+
+      - name: Checksum
+        run: make checksum
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/goodreadskosync-*.zip
+            dist/goodreadskosync-*.zip.sha256
+          generate_release_notes: true

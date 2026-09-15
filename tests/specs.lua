@@ -1,0 +1,25 @@
+-- Manifest of spec modules (relative to tests/, dot-separated).
+-- Update when adding a new *_spec.lua file.
+return {
+    "specs.util_spec",
+    "specs.epub_spec",
+    "specs.matcher_spec",
+    "specs.storage_spec",
+    "specs.resolver_spec",
+    "specs.provider_spec",
+    "specs.sync_spec",
+    "specs.queue_spec",
+    "specs.logging_spec",
+    "specs.http_spec",
+    "specs.session_spec",
+    "specs.credentials_spec",
+    "specs.auth_manager_spec",
+    "specs.login_spec",
+    "specs.client_spec",
+    "specs.goodreads_web_spec",
+    "specs.update_spec",
+    "specs.support_qr_spec",
+    "specs.shelf_cache_spec",
+    "specs.presets_spec",
+    "specs.shelves_spec",
+}

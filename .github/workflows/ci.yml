@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 luarocks zip
+          sudo luarocks install luacheck
+
+      - name: Static analysis (luacheck)
+        continue-on-error: true
+        run: make check LUACHECK=luacheck
+
+      - name: Unit tests
+        run: make test LUA=lua5.1
+
+      - name: Package
+        run: make package
+
+      - name: Verify archive contents
+        run: |
+          set -e
+          unzip -l dist/*.zip
+          unzip -l dist/*.zip | grep -q "goodreadskosync.koplugin/main.lua"
+          if unzip -l dist/*.zip | grep -Eq "tests/|tools/|docs/|\.github/"; then
+            echo "Archive contains development files" >&2
+            exit 1
+          fi
+
+      - name: Generate SHA-256
+        run: make checksum
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: goodreadskosync
+          path: dist/

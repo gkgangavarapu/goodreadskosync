@@ -1,0 +1,53 @@
+local Presets = require("goodreadskosync.sync.presets")
+
+describe("presets", function()
+    it("has four ordered presets with medium as the default", function()
+        assert_equal(4, #Presets.ORDER)
+        assert_equal("fastest", Presets.ORDER[1])
+        assert_equal("relaxed", Presets.ORDER[4])
+        assert_equal("medium", Presets.DEFAULT)
+    end)
+
+    it("fastest tracks progress on page turns and checks every 2 minutes", function()
+        local def = Presets.get("fastest")
+        assert_equal("percent", def.track_mode)
+        assert_equal(2, def.track_percent_step)
+        assert_equal(120, def.sync_interval)
+    end)
+
+    it("faster tracks progress on page turns and checks every 5 minutes", function()
+        local def = Presets.get("faster")
+        assert_equal("percent", def.track_mode)
+        assert_equal(5, def.track_percent_step)
+        assert_equal(300, def.sync_interval)
+    end)
+
+    it("medium uses time tracking with a 15 minute checkpoint", function()
+        local def = Presets.get("medium")
+        assert_equal("time", def.track_mode)
+        assert_equal(900, def.sync_interval)
+    end)
+
+    it("relaxed only syncs on open/close and reconnect", function()
+        local def = Presets.get("relaxed")
+        assert_equal("time", def.track_mode)
+        assert_equal(0, def.sync_interval)
+    end)
+
+    it("every preset keeps shelves/progress and the event triggers on", function()
+        for _, id in ipairs(Presets.ORDER) do
+            local def = Presets.get(id)
+            assert_true(def.auto_shelf)
+            assert_true(def.auto_progress)
+            assert_true(def.sync_on_open)
+            assert_true(def.sync_on_close)
+            assert_equal("explicit_only", def.completion_behavior)
+            assert_false(def.update_progress_after_finished)
+        end
+    end)
+
+    it("rejects unknown presets", function()
+        assert_false(Presets.is_valid("nope"))
+        assert_nil(Presets.get("nope"))
+    end)
+end)

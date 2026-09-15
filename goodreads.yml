@@ -1,0 +1,30 @@
+---
+base: lua51
+# Custom standard library for selene: KOReader globals + test harness DSL.
+globals:
+  G_reader_settings:
+    any: true
+  G_defaults:
+    any: true
+  DEBUG:
+    any: true
+  describe:
+    any: true
+  it:
+    any: true
+  assert_true:
+    any: true
+  assert_false:
+    any: true
+  assert_nil:
+    any: true
+  assert_not_nil:
+    any: true
+  assert_equal:
+    any: true
+  assert_deep_equal:
+    any: true
+  assert_error:
+    any: true
+
+
