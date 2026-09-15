@@ -2008,8 +2008,7 @@ end
 function Goodreads:loadShelf(shelf)
     local provider = self:getProvider()
     if not provider or not provider.get_shelf_books then return nil end
-    local books = provider:get_shelf_books(shelf, 1)
-    return books
+    return provider:get_shelf_books(shelf, 1)
 end
 
 function Goodreads:addToMainMenu(menu_items)

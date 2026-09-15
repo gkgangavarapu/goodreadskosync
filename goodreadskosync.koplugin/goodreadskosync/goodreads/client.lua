@@ -240,7 +240,7 @@ function Client:get_shelf_books(shelf, page)
     if custom == nil then custom = not DEFAULT_SHELVES[name] end
     page = page or 1
     local param = custom and ("tag=" .. name) or ("shelf=" .. name)
-    local url = string.format("%s/review/list?%s&per_page=100&page=%d",
+    local url = string.format("%s/review/list?%s&per_page=100&page=%d&view=table",
         self.base_url, param, page)
     local resp = self.http:get(url, { follow = true, detect_auth = true })
     if resp.error then return nil, false end

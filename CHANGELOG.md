@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-09-15
+
+### Fixed
+
+- Opening a shelf could show **"No books"** when Goodreads served the shelf in
+  its cover-grid layout. Shelves are now requested in the list (table) layout,
+  so the books load reliably.
+
 ## [1.9.0] - 2026-09-15
 
 ### Added
