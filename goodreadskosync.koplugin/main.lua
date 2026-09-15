@@ -2069,7 +2069,36 @@ function Goodreads:loadShelf(shelf)
     return books
 end
 
+-- Pin our entry into the "Tools" list so it isn't buried under "More tools".
+-- Mirrors how well-known plugins inject into KOReader's menu order tables.
+local function injectIntoToolsMenu()
+    local menu_orders = {
+        "ui/elements/reader_menu_order",
+        "ui/elements/filemanager_menu_order",
+    }
+    local function contains(tbl, target)
+        if type(tbl) ~= "table" then return false end
+        for _, val in pairs(tbl) do
+            if val == target then
+                return true
+            elseif type(val) == "table" and contains(val, target) then
+                return true
+            end
+        end
+        return false
+    end
+    for _, path in ipairs(menu_orders) do
+        local ok, order = pcall(require, path)
+        if ok and type(order) == "table" and type(order.tools) == "table" then
+            if not contains(order, "goodreads") then
+                table.insert(order.tools, 3, "goodreads")
+            end
+        end
+    end
+end
+
 function Goodreads:addToMainMenu(menu_items)
+    injectIntoToolsMenu()
     menu_items.goodreads = {
         text_func = function()
             if Auth.is_authenticated() then
@@ -2077,7 +2106,7 @@ function Goodreads:addToMainMenu(menu_items)
             end
             return _("Goodreads Sync (unofficial) — sign in")
         end,
-        sorting_hint = "more_tools",
+        sorting_hint = "tools",
         sub_item_table_func = function() return self:buildMenu() end,
     }
 end
