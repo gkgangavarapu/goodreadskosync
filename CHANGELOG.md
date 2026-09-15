@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-09-15
+
+### Fixed
+
+- **Settings no longer crashes KOReader.**
+- Reading progress is not pushed again when Goodreads already has that percent.
+- The shelves browser now caches what it loaded, so it opens instantly and only
+  re-fetches when you choose **Refresh from Goodreads**.
+
+### Changed
+
+- Shelf book lists show each book's **author**, with clear row separators.
+- The update prompt now shows the **release notes** before downloading.
+
 ## [1.9.1] - 2026-09-15
 
 ### Fixed

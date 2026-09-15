@@ -48,18 +48,26 @@ end
 -- Release parsing
 --------------------------------------------------------------------------------
 
--- Pure: extract the version and asset URLs from a GitHub Releases API body.
+-- Pure: extract the version, asset URLs and release notes from a GitHub
+-- Releases API body.
 function Update.parse_release(body)
     if type(body) ~= "string" then return nil end
     local tag = body:match('"tag_name"%s*:%s*"v?([^"]+)"')
     if not tag then return nil end
     local zip_url = body:match('"browser_download_url"%s*:%s*"(https://[^"]+%.zip)"')
     local sha_url = body:match('"browser_download_url"%s*:%s*"(https://[^"]+%.zip%.sha256)"')
+    local notes
+    local ok, Json = pcall(require, "goodreadskosync.goodreads.json")
+    if ok and Json and type(Json.decode_any) == "function" then
+        local decoded = Json.decode_any(body)
+        if type(decoded) == "table" then notes = decoded.body end
+    end
     return {
         version = tag,
         zip_url = zip_url,
         sha_url = sha_url,
         page_url = PAGE_URL,
+        notes = notes,
     }
 end
 

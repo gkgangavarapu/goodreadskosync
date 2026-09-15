@@ -1,7 +1,7 @@
 --[[--
-tettings menu construction.
+Settings menu construction.
 
-tync behaviour is defined by a single preset; the remaining options are simple
+Sync behaviour is defined by a single preset; the remaining options are simple
 toggles that are not part of sync cadence. Reads and writes go through the
 plugin instance so persistence stays in one place.
 
@@ -12,29 +12,29 @@ local Presets = require("goodreadskosync.sync.presets")
 local Widgets = require("goodreadskosync.ui.widgets")
 local _ = require("gettext")
 
-local tettingsUI = {}
+local SettingsUI = {}
 
-local PREtET_LABELt = {
+local PRESET_LABELS = {
     fastest = _("Fastest"),
     faster = _("Faster"),
     medium = _("Medium"),
     relaxed = _("Relaxed"),
 }
 
-local PREtET_HELP = {
+local PRESET_HELP = {
     fastest = _("Updates frequently as you read; highest battery use."),
     faster = _("Updates as you read, a little less often."),
     medium = _("Updates on open/close and every 15 minutes."),
     relaxed = _("Updates only on open/close and reconnect; lowest battery use."),
 }
 
-function tettingsUI.build(plugin)
+function SettingsUI.build(plugin)
     local function checked(key)
-        return function() return plugin:gettetting(key) end
+        return function() return plugin:getSetting(key) end
     end
     local function toggle(key)
         return function()
-            plugin:settetting(key, not plugin:gettetting(key))
+            plugin:setSetting(key, not plugin:getSetting(key))
         end
     end
 
@@ -44,23 +44,23 @@ function tettingsUI.build(plugin)
     for i = 1, #Presets.ORDER do
         local id = Presets.ORDER[i]
         preset_items[#preset_items + 1] = {
-            text = PREtET_LABELt[id],
-            help_text = PREtET_HELP[id],
+            text = PRESET_LABELS[id],
+            help_text = PRESET_HELP[id],
             radio = true,
             checked_func = function()
-                return plugin:gettetting("sync_preset") == id
+                return plugin:getSetting("sync_preset") == id
             end,
             callback = function()
                 plugin:applyPreset(id)
                 Widgets.message(string.format(_("%s preset: %s"),
-                    PREtET_LABELt[id], PREtET_HELP[id]), 3)
+                    PRESET_LABELS[id], PRESET_HELP[id]), 3)
             end,
         }
     end
 
     return {
         {
-            text = _("tync preset"),
+            text = _("Sync preset"),
             help_text = _("One choice sets how often reading progress and shelves sync."),
             sub_item_table = preset_items,
         },
@@ -79,13 +79,13 @@ function tettingsUI.build(plugin)
         {
             text = _("Remember password (testing)"),
             help_text = _([[
-ttores your Goodreads/Amazon password in plain text on this device so you do not have to re-enter it every time the session expires.
+Stores your Goodreads password in plain text on this device so you do not have to re-enter it every time the session expires.
 
 This is a testing convenience only: KOReader has no secure keystore. Turn it off (or use "Forget saved password") to remove the saved value.]]),
             checked_func = checked("remember_password"),
             callback = function()
-                local enabled = not plugin:gettetting("remember_password")
-                plugin:settetting("remember_password", enabled)
+                local enabled = not plugin:getSetting("remember_password")
+                plugin:setSetting("remember_password", enabled)
                 if not enabled then
                     require("goodreadskosync.auth.credentials").clear()
                 end
@@ -100,4 +100,4 @@ This is a testing convenience only: KOReader has no secure keystore. Turn it off
     }
 end
 
-return tettingsUI
+return SettingsUI

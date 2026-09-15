@@ -1669,6 +1669,20 @@ function Goodreads:postNote(note)
     end)
 end
 
+-- Turn a GitHub release body into short plain text for the update prompt.
+function Goodreads:formatReleaseNotes(text)
+    if type(text) ~= "string" or text == "" then return nil end
+    text = text:gsub("\r\n", "\n")
+    text = text:gsub("^#+%s*", "")
+    text = text:gsub("\n#+%s*", "\n")
+    text = text:gsub("%*%*", "")
+    text = text:gsub("`", "")
+    text = text:gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" then return nil end
+    if #text > 600 then text = text:sub(1, 600) .. "…" end
+    return text
+end
+
 function Goodreads:checkForUpdates(manual)
     self:runWhenOnline(function()
         self:runAsync(function()
@@ -1693,8 +1707,12 @@ function Goodreads:checkForUpdates(manual)
                 if manual then Widgets.notify(_("You're up to date.")) end
                 return
             end
+            local msg = string.format(_("Goodreads Sync %s is available."), info.version)
+            local notes = self:formatReleaseNotes(info.notes)
+            if notes then msg = msg .. "\n\n" .. notes end
+            msg = msg .. "\n\n" .. _("Download and install now? KOReader will need a restart.")
             Widgets.confirm(
-                string.format(_("Goodreads Sync %s is available. Update now?"), info.version),
+                msg,
                 function() self:installUpdate(info) end,
                 _("Update"))
         end)
@@ -1764,11 +1782,15 @@ function Goodreads:onCloseDocument()
     if not mapping or not mapping.goodreads_id then return end
     local payload = self:progressPayload(identity.local_key)
     if not payload then return end
-    Queue.enqueue({
-        operation = "progress",
-        book_id = mapping.goodreads_id,
-        payload = payload,
-    })
+    -- Only queue progress Goodreads doesn't already have (avoids re-pushing the
+    -- same percent, e.g. 4%, again on close).
+    if Progress.shouldSync(State.get(identity.local_key), payload.percent) then
+        Queue.enqueue({
+            operation = "progress",
+            book_id = mapping.goodreads_id,
+            payload = payload,
+        })
+    end
     if self:currentStatus() == "complete" then
         Queue.enqueue({
             operation = "shelf",
@@ -1797,7 +1819,7 @@ function Goodreads:onSuspend()
         local mapping, identity = self:currentMapping()
         if mapping and mapping.goodreads_id then
             local payload = self:progressPayload(identity.local_key)
-            if payload then
+            if payload and Progress.shouldSync(State.get(identity.local_key), payload.percent) then
                 Queue.enqueue({
                     operation = "progress",
                     book_id = mapping.goodreads_id,
@@ -1959,18 +1981,49 @@ function Goodreads:showLibrary()
     end
 end
 
--- Whole library for the browser: { shelves = {slug,name,books}, full = bool }.
--- Uses the provider (default + custom shelves) when possible, else our own
--- linked books on the four default shelves.
+-- Persistent cache of the shelves loaded from Goodreads, so the browser opens
+-- instantly and does not re-fetch until the user asks to refresh.
+local function library_store()
+    return Storage.open("library_cache")
+end
+
+-- Read-only view of the cached library (never does network I/O). Falls back to
+-- the plugin's own linked books.
+function Goodreads:cachedLibraryData()
+    if self._library_cache then return self._library_cache end
+    local ok, cached = pcall(function() return library_store():get("data") end)
+    if ok and type(cached) == "table" and type(cached.shelves) == "table"
+        and #cached.shelves > 0 then
+        self._library_cache = cached
+        return cached
+    end
+    return self:localLibraryData()
+end
+
+-- Fetch the library from the provider and cache it.
+-- { shelves = {slug,name,custom,count,books}, full = bool }
 function Goodreads:libraryData()
     local provider = self:getProvider()
     if provider and provider.get_library then
         local shelves = provider:get_library()
         if type(shelves) == "table" and #shelves > 0 then
-            return { shelves = shelves, full = true }
+            local data = { shelves = shelves, full = true, saved_at = os.time() }
+            self:persistLibrary(data)
+            return data
         end
     end
     return self:localLibraryData()
+end
+
+-- Persist a library structure (shelves plus any loaded books) to disk.
+function Goodreads:persistLibrary(data)
+    if type(data) ~= "table" or not data.full then return end
+    self._library_cache = data
+    pcall(function()
+        local s = library_store()
+        s:set("data", data)
+        s:flush()
+    end)
 end
 
 -- The four default shelves built only from our own linked books. Never does
@@ -2004,11 +2057,16 @@ function Goodreads:localLibraryData()
     return { shelves = shelves, full = false }
 end
 
--- One page of books for a single shelf (used by the shelves browser).
+-- One page of books for a single shelf (used by the shelves browser), cached.
 function Goodreads:loadShelf(shelf)
     local provider = self:getProvider()
     if not provider or not provider.get_shelf_books then return nil end
-    return provider:get_shelf_books(shelf, 1)
+    local books = provider:get_shelf_books(shelf, 1)
+    if type(books) == "table" and self._library_cache then
+        shelf.books = books
+        self:persistLibrary(self._library_cache)
+    end
+    return books
 end
 
 function Goodreads:addToMainMenu(menu_items)

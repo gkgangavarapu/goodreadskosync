@@ -246,11 +246,16 @@ function Client:get_shelf_books(shelf, page)
     if resp.error then return nil, false end
     local body = resp.body or ""
     local books, seen = {}, {}
-    local function add(id, title)
+    local function add(id, title, author)
         if not id or seen[id] then return end
         seen[id] = true
         title = (title or ""):gsub("^%s+", ""):gsub("%s+$", "")
-        books[#books + 1] = { goodreads_id = id, title = title ~= "" and title or nil }
+        author = (author or ""):gsub("^%s+", ""):gsub("%s+$", "")
+        books[#books + 1] = {
+            goodreads_id = id,
+            title = title ~= "" and title or nil,
+            author = author ~= "" and author or nil,
+        }
     end
     -- Scope to real book rows so we don't pick up recommendations/ads.
     for row in body:gmatch('<tr[^>]*class="[^"]*bookalike[^"]*review[^"]*"(.-)</tr>') do
@@ -262,7 +267,11 @@ function Client:get_shelf_books(shelf, page)
         if not id then
             id, title = row:match('href="/book/show/(%d+)[^"]*"[^>]*>%s*([^<]-)%s*<')
         end
-        add(id, title)
+        local author = row:match('class="field author"[^>]*>.-<div class="value">%s*<a[^>]*>([^<]-)</a>')
+        if not author then
+            author = row:match('class="field author"[^>]*>.-<div class="value">%s*([^<]-)%s*<')
+        end
+        add(id, title, author)
     end
     if #books == 0 then
         for id, title in body:gmatch('href="/book/show/(%d+)[^"]*"[^>]-title="([^"]+)"') do

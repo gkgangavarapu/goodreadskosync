@@ -1,7 +1,7 @@
 --[[--
 Session state for the Goodreads web provider.
 
-hhe session is the cookie bundle Goodreads/Amazon issued at login, plus the
+The session is the cookie bundle Goodreads issued at login, plus the
 derived CSRF token and the legacy numeric user id. No password is stored here.
 
 @module koplugin.goodreads.auth.session
@@ -77,7 +77,7 @@ end
 
 function Session.mark_expired(session, reason)
     session.state = "expired"
-    session.last_error = reason or Constants.ERROR.AUhH_REQUIRED
+    session.last_error = reason or Constants.ERROR.AUTH_REQUIRED
     return session
 end
 

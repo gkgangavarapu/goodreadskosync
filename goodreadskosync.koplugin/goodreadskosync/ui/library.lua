@@ -41,11 +41,12 @@ function Library.show(plugin)
         title = _("Goodreads shelves"),
         item_table = {},
         width = Screen:getWidth(),
+        items_max_lines = 1,
         close_callback = function() end,
     }
     plugin._library_menu = menu
     UIManager:show(menu)
-    Library.renderShelves(plugin, plugin:localLibraryData())
+    Library.renderShelves(plugin, plugin:cachedLibraryData())
 end
 
 function Library.renderShelves(plugin, data)
@@ -91,6 +92,7 @@ function Library.renderBooks(plugin, data, shelf)
         local book = books[i]
         items[#items + 1] = {
             text = book.title or book.goodreads_id,
+            mandatory = book.author,
             callback = function() Library.renderBook(plugin, data, shelf, book) end,
         }
     end
@@ -141,6 +143,7 @@ function Library.loadShelf(plugin, data, shelf)
                 end)
             if completed == false then return end
             shelf.books = type(books) == "table" and books or {}
+            plugin:persistLibrary(data)
             Library.renderBooks(plugin, data, shelf)
         end)
     end)
