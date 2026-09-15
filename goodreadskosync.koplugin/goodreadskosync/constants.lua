@@ -8,7 +8,7 @@ the resolver and sync engine remain usable from unit tests without KOReader.
 --]]
 
 local Constants = {
-    VERSION = "1.10.0",
+    VERSION = "1.10.1",
 
     -- Storage schema version. Bump only alongside a migration function.
     SCHEMA_VERSION = 1,

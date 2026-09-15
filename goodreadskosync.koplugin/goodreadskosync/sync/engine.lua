@@ -127,7 +127,7 @@ function Engine.updateState(state, results, now)
 end
 
 -- Queue every failed action for later retry.
-function Engine.enqueueFailures(queue, book_id, results)
+function Engine.enqueueFailures(queue, book_id, results, local_key)
     queue = queue or Queue
     local count = 0
     for _, result in ipairs(results or {}) do
@@ -135,6 +135,7 @@ function Engine.enqueueFailures(queue, book_id, results)
             queue.enqueue({
                 operation = result.action.type,
                 book_id = book_id,
+                local_key = local_key,
                 payload = result.action,
             })
             count = count + 1
@@ -172,7 +173,7 @@ function Engine.sync(opts)
     })
     local results = Engine.apply(opts.provider, book_id, actions)
     Engine.updateState(state, results, opts.now)
-    Engine.enqueueFailures(opts.queue, book_id, results)
+    Engine.enqueueFailures(opts.queue, book_id, results, opts.local_key)
     return results, state
 end
 

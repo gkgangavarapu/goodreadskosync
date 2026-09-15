@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-09-15
+
+### Fixed
+
+- Multiple reading updates with the same percent are no longer posted; a queued
+  progress send now records success, so it isn't pushed again by the next sync.
+
 ## [1.10.0] - 2026-09-15
 
 ### Changed

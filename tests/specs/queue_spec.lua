@@ -22,6 +22,22 @@ describe("sync.queue", function()
         assert_equal(55, due[1].payload.percent)
     end)
 
+    it("keeps the local_key so a flush can advance progress state", function()
+        Storage.reset()
+        Queue.clear()
+        Queue.enqueue({
+            operation = "progress", book_id = "1", local_key = "sha:abc",
+            payload = { percent = 7 },
+        })
+        assert_equal("sha:abc", Queue.due()[1].local_key)
+        -- A later enqueue for the same book refreshes the key too.
+        Queue.enqueue({
+            operation = "progress", book_id = "1", local_key = "sha:def",
+            payload = { percent = 8 },
+        })
+        assert_equal("sha:def", Queue.due()[1].local_key)
+    end)
+
     it("keeps distinct operations and books separate", function()
         Storage.reset()
         Queue.clear()

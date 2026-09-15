@@ -679,6 +679,7 @@ function Goodreads:_syncCore(inputs)
         return Engine.sync({
             provider = provider,
             identity = { goodreads_id = inputs.gid },
+            local_key = inputs.local_key,
             state = state,
             percent = inputs.percent,
             page_value = inputs.page_value,
@@ -953,16 +954,35 @@ function Goodreads:processQueueCore()
     local ids, seen = {}, {}
     for _, op in ipairs(Queue.due()) do
         local ok, err
+        local drop = false
+        local percent
         if op.operation == "shelf" then
             ok, err = provider:set_shelf(op.book_id, op.payload.shelf)
         elseif op.operation == "progress" then
-            ok, err = provider:update_progress(op.book_id,
-                op.payload.value or op.payload.percent, op.payload.unit)
+            percent = tonumber(op.payload and op.payload.percent) or 0
+            -- Skip a stale progress op if the percent is already accounted for;
+            -- this keeps the flush and the event engine from sending it twice.
+            if op.local_key and not Progress.shouldSync(State.get(op.local_key), percent) then
+                drop = true
+            else
+                ok, err = provider:update_progress(op.book_id,
+                    op.payload.value or op.payload.percent, op.payload.unit)
+            end
         elseif op.operation == "rating" then
             ok, err = provider:set_rating(op.book_id, op.payload.rating)
         end
-        if ok then
+        if drop then
             Queue.remove(op.id)
+        elseif ok then
+            Queue.remove(op.id)
+            if op.operation == "progress" and op.local_key then
+                State.patch(op.local_key, {
+                    last_successful_percent = percent,
+                    last_cloud_percent = percent,
+                    last_successful_page = (op.payload and op.payload.unit == "pages")
+                        and op.payload.value or nil,
+                })
+            end
             sent = sent + 1
             local key = tostring(op.book_id)
             if not seen[key] then
@@ -1788,6 +1808,7 @@ function Goodreads:onCloseDocument()
         Queue.enqueue({
             operation = "progress",
             book_id = mapping.goodreads_id,
+            local_key = identity.local_key,
             payload = payload,
         })
     end
@@ -1823,6 +1844,7 @@ function Goodreads:onSuspend()
                 Queue.enqueue({
                     operation = "progress",
                     book_id = mapping.goodreads_id,
+                    local_key = identity.local_key,
                     payload = payload,
                 })
             end
@@ -1831,19 +1853,28 @@ function Goodreads:onSuspend()
 end
 
 function Goodreads:onResume()
-    self:processQueue()
     self:maybeIdentifyOnReconnect()
-    -- Push the open book's progress after waking, too.
-    self:syncSilently()
+    -- One flush path only: an engine run also flushes the queue, so a separate
+    -- processQueue() here would send the same pending progress twice.
+    local mapping = self:currentMapping()
+    if self:hasDocument() and mapping and mapping.goodreads_id and self:isOnline() then
+        self:syncSilently()
+    else
+        self:processQueue()
+    end
     self:_runPendingOnline()
 end
 
 -- Flush the queue, link if needed, and push the open book's progress as soon
 -- as connectivity returns, so nothing read offline waits for a checkpoint.
 function Goodreads:onNetworkConnected()
-    self:processQueue()
     self:maybeIdentifyOnReconnect()
-    self:syncSilently()
+    local mapping = self:currentMapping()
+    if self:hasDocument() and mapping and mapping.goodreads_id and self:isOnline() then
+        self:syncSilently()
+    else
+        self:processQueue()
+    end
     self:_runPendingOnline()
 end
 

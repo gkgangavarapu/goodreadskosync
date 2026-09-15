@@ -34,6 +34,7 @@ function Queue.enqueue(operation)
     local existing = ops[key]
     if existing then
         existing.payload = operation.payload
+        existing.local_key = operation.local_key
         existing.attempts = 0
         existing.failed = false
         existing.last_error = nil
@@ -44,6 +45,7 @@ function Queue.enqueue(operation)
             id = key,
             operation = operation.operation,
             book_id = operation.book_id,
+            local_key = operation.local_key,
             payload = operation.payload,
             created_at = now,
             updated_at = now,
