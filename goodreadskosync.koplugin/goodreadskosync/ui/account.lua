@@ -17,7 +17,7 @@ function Account.show(status, handlers)
     handlers = handlers or {}
     local dialog
     local lines = {
-        _("Goodreads Sync"),
+        _("Goodreads KO Sync"),
         "",
     }
     if status.account and (status.account.username or status.account.id) then

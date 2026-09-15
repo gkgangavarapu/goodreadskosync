@@ -13,7 +13,7 @@ local _ = require("gettext")
 local Widgets = {}
 
 -- Every message is prefixed so the user always knows which plugin it is from.
-local BRAND = _("Goodreads Sync")
+local BRAND = _("Goodreads KO Sync")
 
 local function brand(text)
     local s = tostring(text or "")

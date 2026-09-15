@@ -92,7 +92,7 @@ Get the latest `goodreadskosync-<version>.zip` from the [Releases](https://githu
 
 ### From KOReader Storefront
 
-Install **Storefront** on your device, then install **Goodreads Sync (unofficial)**
+Install **Storefront** on your device, then install **Goodreads KO Sync**
 from its catalogue.
 
 ### Manually
@@ -103,7 +103,7 @@ from its catalogue.
    - Android: `/sdcard/koreader/plugins/`- Untested
    - Linux / macOS: `~/.config/koreader/plugins/`- Untested
 2. Restart KOReader.
-3. Open **Tools → Goodreads Sync (unofficial) → Account → Log in**.
+3. Open **Tools → Goodreads KO Sync → Account → Log in**.
 
 ## Disclaimer
 

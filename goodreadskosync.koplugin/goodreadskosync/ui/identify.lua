@@ -13,9 +13,9 @@ local Identify = {}
 
 -- Show the candidate list for a resolution result.
 function Identify.showCandidates(identity, candidates, on_select)
-    local title = _("Goodreads Sync\nWhich book is this?")
+    local title = _("Goodreads KO Sync\nWhich book is this?")
     if identity and identity.title then
-        title = string.format(_("Goodreads Sync\n%s"), identity.title)
+        title = string.format(_("Goodreads KO Sync\n%s"), identity.title)
     end
     Widgets.candidateDialog(candidates, on_select, { title = title })
 end
@@ -25,7 +25,7 @@ end
 function Identify.showUnidentified(identity, handlers)
     handlers = handlers or {}
     local dialog
-    local lines = { _("Goodreads Sync"), "", _("Couldn't link this book."), "" }
+    local lines = { _("Goodreads KO Sync"), "", _("Couldn't link this book."), "" }
     if identity then
         lines[#lines + 1] = string.format("%s: %s", _("Title"),
             identity.title or _("unknown"))

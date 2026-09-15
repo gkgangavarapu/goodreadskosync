@@ -1,11 +1,11 @@
 local Presets = require("goodreadskosync.sync.presets")
 
 describe("presets", function()
-    it("has four ordered presets with medium as the default", function()
+    it("has four ordered presets with relaxed as the default", function()
         assert_equal(4, #Presets.ORDER)
         assert_equal("fastest", Presets.ORDER[1])
         assert_equal("relaxed", Presets.ORDER[4])
-        assert_equal("medium", Presets.DEFAULT)
+        assert_equal("relaxed", Presets.DEFAULT)
     end)
 
     it("fastest tracks progress on page turns and checks every 2 minutes", function()

@@ -1,5 +1,5 @@
 --[[--
-goodreadskosync - Goodreads Sync for KOReader.
+goodreadskosync - Goodreads KO Sync for KOReader.
 
 This is the plugin entry point. It wires the identification resolver and the
 sync engine to KOReader's reader lifecycle and menu. It contains no provider
@@ -1612,7 +1612,7 @@ function Goodreads:registerHighlight()
     self.ui.highlight:removeFromHighlightDialog("goodreads_note")
     self.ui.highlight:addToHighlightDialog("goodreads_note", function(this)
         return {
-            text = _("Goodreads Sync: Add note"),
+            text = _("Goodreads KO Sync: Add note"),
             enabled_func = function()
                 return self:hasDocument() and self:currentMapping() ~= nil
             end,
@@ -1707,7 +1707,7 @@ function Goodreads:checkForUpdates(manual)
                 if manual then Widgets.notify(_("You're up to date.")) end
                 return
             end
-            local msg = string.format(_("Goodreads Sync %s is available."), info.version)
+            local msg = string.format(_("Goodreads KO Sync %s is available."), info.version)
             local notes = self:formatReleaseNotes(info.notes)
             if notes then msg = msg .. "\n\n" .. notes end
             msg = msg .. "\n\n" .. _("Download and install now? KOReader will need a restart.")
@@ -1735,7 +1735,7 @@ function Goodreads:installUpdate(info)
             end)
         if completed == false then return end
         if ok then
-            UIManager:askForRestart(_("Goodreads Sync updated. Restart KOReader to apply."))
+            UIManager:askForRestart(_("Goodreads KO Sync updated. Restart KOReader to apply."))
         else
             Widgets.message(string.format(_("Update failed: %s"), tostring(err)), 6)
         end
@@ -2102,9 +2102,9 @@ function Goodreads:addToMainMenu(menu_items)
     menu_items.goodreads = {
         text_func = function()
             if Auth.is_authenticated() then
-                return _("Goodreads Sync (unofficial)")
+                return _("Goodreads KO Sync")
             end
-            return _("Goodreads Sync (unofficial) — sign in")
+            return _("Goodreads KO Sync — sign in")
         end,
         sorting_hint = "tools",
         sub_item_table_func = function() return self:buildMenu() end,
@@ -2255,7 +2255,7 @@ function Goodreads:buildMenu()
                     end,
                     callback = function()
                         UIManager:show(InfoMessage:new{
-                            text = string.format(_("Goodreads Sync v%s\n%s"),
+                            text = string.format(_("Goodreads KO Sync v%s\n%s"),
                                 Constants.VERSION, Update.PAGE_URL),
                             timeout = 10,
                         })

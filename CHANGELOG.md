@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-15
+
+### Changed
+
+- The plugin is now named **Goodreads KO Sync**.
+- New installs default to the **Relaxed** sync preset; existing installs keep
+  their chosen preset.
+
 ## [1.9.3] - 2026-09-15
 
 ### Changed

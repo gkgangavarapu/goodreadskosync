@@ -38,7 +38,7 @@ local SHELF_LABEL = {
 function Status.show(data, handlers)
     handlers = handlers or {}
     local dialog
-    local lines = { _("Goodreads Sync"), "" }
+    local lines = { _("Goodreads KO Sync"), "" }
     lines[#lines + 1] = string.format("%s: %s", _("Book"), data.title or _("unknown"))
     if data.author then
         lines[#lines + 1] = string.format("%s: %s", _("Author"), data.author)

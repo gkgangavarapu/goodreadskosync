@@ -13,7 +13,7 @@ local Constants = require("goodreadskosync.constants")
 local Presets = {}
 
 Presets.ORDER = { "fastest", "faster", "medium", "relaxed" }
-Presets.DEFAULT = "medium"
+Presets.DEFAULT = "relaxed"
 
 -- Values shared by every preset (kept here so a preset fully defines behaviour).
 local COMMON = {
