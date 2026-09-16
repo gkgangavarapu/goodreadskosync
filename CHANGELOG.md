@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-09-16
+
+### Added
+
+- **Diagnostic logging** option in Settings (off by default) that writes detailed
+  sync logs to the plugin's `login.log` for troubleshooting.
+- If a progress update is rejected because the book isn't on a Goodreads shelf,
+  the plugin now re-adds it to **Currently Reading** and retries once.
+
+### Changed
+
+- Toasts are smaller and less intrusive.
+
 ## [1.10.1] - 2026-09-15
 
 ### Fixed

@@ -57,6 +57,7 @@ local DEFAULT_SETTINGS = {
     conflict_policy = Constants.CONFLICT_POLICY.PREFER_LOCAL,
     completion_behavior = Constants.COMPLETION_BEHAVIOR.EXPLICIT_ONLY,
     sync_preset = "medium",
+    logging = false,
 }
 
 local Goodreads = WidgetContainer:extend{
@@ -71,6 +72,7 @@ local Goodreads = WidgetContainer:extend{
 function Goodreads:init()
     self.settings_store = Storage.open(Constants.STORAGE.SETTINGS)
     self.book_store = Storage.open(Constants.STORAGE.BOOK_SETTINGS)
+    Logging.setEnabled(self:getSetting("logging") == true)
     self._provider = nil
     self._pending_online = {}
     self._sync_busy = false
@@ -580,6 +582,10 @@ function Goodreads:_syncCore(inputs)
         return { ok = true, skipped = true }
     end
 
+    Logging.diag("_syncCore: gid=", tostring(inputs.gid), " pct=", tostring(inputs.percent),
+        " unit=", tostring(inputs.sync_unit), " force=", tostring(inputs.force_remote),
+        " status=", tostring(inputs.status))
+
     local state = State.get(inputs.local_key)
     state.goodreads_id = inputs.gid
 
@@ -598,6 +604,10 @@ function Goodreads:_syncCore(inputs)
             remote_shelf = remote.shelf
         end
     end
+
+    Logging.diag("_syncCore: remote_shelf=", tostring(remote_shelf),
+        " state.shelf=", tostring(state.shelf),
+        " override=", tostring(state.override_shelf))
 
     local settings = inputs.settings
     local percent = inputs.percent or 0
@@ -726,6 +736,10 @@ function Goodreads:_syncCore(inputs)
         Queue.remove("progress:" .. tostring(inputs.gid))
     end
 
+    for _, result in ipairs(results) do
+        Logging.diag("_syncCore: result type=", tostring(result.action and result.action.type),
+            " ok=", tostring(result.ok), " error=", tostring(result.error))
+    end
     State.set(inputs.local_key, new_state)
     self:processQueueCore()
 
@@ -757,6 +771,7 @@ function Goodreads:_syncCore(inputs)
 end
 
 function Goodreads:_syncNow()
+    Logging.diag("event: syncNow")
     if not self:hasDocument() then
         Widgets.message(_("Open a book first."))
         return
@@ -864,20 +879,35 @@ end
 -- Automatic sync (on open, periodic, resume) with light feedback.
 function Goodreads:syncSilently(opts)
     opts = opts or {}
-    if not self:hasDocument() then return end
+    Logging.diag("syncSilently: force=", tostring(opts.force_remote),
+        " doc=", tostring(self:hasDocument()), " online=", tostring(self:isOnline()))
+    if not self:hasDocument() then
+        Logging.diag("syncSilently: no document -> skip")
+        return
+    end
     local mapping = self:currentMapping()
-    if not mapping or not mapping.goodreads_id then return end
+    if not mapping or not mapping.goodreads_id then
+        Logging.diag("syncSilently: no mapping -> skip")
+        return
+    end
     -- Automatic syncs never turn Wi-Fi on: they run when already online and
     -- otherwise defer to the offline queue (flushed on reconnect/close).
-    if not self:isOnline() then return end
+    if not self:isOnline() then
+        Logging.diag("syncSilently: offline -> defer")
+        return
+    end
     -- One sync at a time: overlapping triggers otherwise push the same progress
     -- more than once. Coalesce them into a single follow-up run.
     if self._sync_busy then
+        Logging.diag("syncSilently: busy -> coalesced")
         self._sync_queued = true
         return
     end
     local inputs = self:syncInputs(opts)
-    if not inputs then return end
+    if not inputs then
+        Logging.diag("syncSilently: no inputs -> skip")
+        return
+    end
     self._sync_busy = true
     self:runAsync(function()
         local completed, summary = self:runInBackground(nil, function()
@@ -885,9 +915,14 @@ function Goodreads:syncSilently(opts)
         end)
         self._sync_busy = false
         if completed == false or not summary then
+            Logging.diag("syncSilently: completed=", tostring(completed), " -> abort")
             self._sync_queued = false
             return
         end
+        Logging.diag("syncSilently: ok=", tostring(summary.ok),
+            " changed=", tostring(summary.changed),
+            " pct=", tostring(summary.percent),
+            " error=", tostring(summary.error))
         if summary.auth_expired then
             self:promptLoginOnOpen()
         elseif summary.changed then
@@ -952,10 +987,15 @@ function Goodreads:processQueueCore()
     if not provider then return { sent = 0, failed = 0, permanent = 0, ids = {} } end
     local sent, failed, permanent = 0, 0, 0
     local ids, seen = {}, {}
-    for _, op in ipairs(Queue.due()) do
+    local due = Queue.due()
+    Logging.diag("processQueue: due=", tostring(#due))
+    for _, op in ipairs(due) do
         local ok, err
         local drop = false
         local percent
+        Logging.diag("processQueue: op=", tostring(op.operation), " book=",
+            tostring(op.book_id), " pct=", tostring(op.payload and op.payload.percent),
+            " key=", tostring(op.local_key))
         if op.operation == "shelf" then
             ok, err = provider:set_shelf(op.book_id, op.payload.shelf)
         elseif op.operation == "progress" then
@@ -972,8 +1012,11 @@ function Goodreads:processQueueCore()
             ok, err = provider:set_rating(op.book_id, op.payload.rating)
         end
         if drop then
+            Logging.diag("processQueue: drop stale progress book=", tostring(op.book_id))
             Queue.remove(op.id)
         elseif ok then
+            Logging.diag("processQueue: sent op=", tostring(op.operation),
+                " book=", tostring(op.book_id))
             Queue.remove(op.id)
             if op.operation == "progress" and op.local_key then
                 State.patch(op.local_key, {
@@ -990,14 +1033,26 @@ function Goodreads:processQueueCore()
                 ids[#ids + 1] = op.book_id
             end
         elseif err == Constants.ERROR.AUTH_REQUIRED then
+            Logging.diag("processQueue: auth required -> stop")
             -- Stop retrying until the user logs in again; leave it queued.
             break
         else
-            local _, became_failed = Queue.markFailure(op.id, err)
-            failed = failed + 1
-            if became_failed then permanent = permanent + 1 end
+            Logging.diag("processQueue: failed op=", tostring(op.operation),
+                " book=", tostring(op.book_id), " error=", tostring(err))
+            if err == Constants.ERROR.NOT_FOUND then
+                -- The client already re-asserted the shelf and retried; a
+                -- remaining 404 is permanent, so drop it instead of looping.
+                Queue.remove(op.id)
+                permanent = permanent + 1
+            else
+                local _, became_failed = Queue.markFailure(op.id, err)
+                failed = failed + 1
+                if became_failed then permanent = permanent + 1 end
+            end
         end
     end
+    Logging.diag("processQueue: done sent=", tostring(sent), " failed=",
+        tostring(failed), " permanent=", tostring(permanent))
     return { sent = sent, failed = failed, permanent = permanent, ids = ids }
 end
 
@@ -1551,6 +1606,7 @@ end
 --------------------------------------------------------------------------------
 
 function Goodreads:onReaderReady()
+    Logging.diag("event: onReaderReady")
     if self.page_mapper then self.page_mapper:cachePageMap() end
     self:registerHighlight()
     self:maybeCheckForUpdates()
@@ -1795,16 +1851,20 @@ function Goodreads:progressPayload(local_key)
 end
 
 function Goodreads:onCloseDocument()
+    Logging.diag("event: onCloseDocument")
     -- Capture progress before the document is torn down, then queue a final sync.
-    if not self:getSetting("sync_on_close") then return end
+    if not self:getSetting("sync_on_close") then
+        Logging.diag("onCloseDocument: sync_on_close off -> skip")
+        return
+    end
     if not self:hasDocument() then return end
     local mapping, identity = self:currentMapping()
     if not mapping or not mapping.goodreads_id then return end
     local payload = self:progressPayload(identity.local_key)
     if not payload then return end
-    -- Only queue progress Goodreads doesn't already have (avoids re-pushing the
-    -- same percent, e.g. 4%, again on close).
     if Progress.shouldSync(State.get(identity.local_key), payload.percent) then
+        Logging.diag("onCloseDocument: queue progress pct=", tostring(payload.percent),
+            " key=", tostring(identity.local_key))
         Queue.enqueue({
             operation = "progress",
             book_id = mapping.goodreads_id,
@@ -1832,15 +1892,18 @@ function Goodreads:onCloseDocument()
 
     -- Flush the queue now so the final progress isn't delayed until the next
     -- timer tick or resume.
+    Logging.diag("onCloseDocument: flush queue")
     self:processQueue()
 end
 
 function Goodreads:onSuspend()
+    Logging.diag("event: onSuspend")
     if self:hasDocument() then
         local mapping, identity = self:currentMapping()
         if mapping and mapping.goodreads_id then
             local payload = self:progressPayload(identity.local_key)
             if payload and Progress.shouldSync(State.get(identity.local_key), payload.percent) then
+                Logging.diag("onSuspend: queue progress pct=", tostring(payload.percent))
                 Queue.enqueue({
                     operation = "progress",
                     book_id = mapping.goodreads_id,
@@ -1853,6 +1916,7 @@ function Goodreads:onSuspend()
 end
 
 function Goodreads:onResume()
+    Logging.diag("event: onResume")
     self:maybeIdentifyOnReconnect()
     -- One flush path only: an engine run also flushes the queue, so a separate
     -- processQueue() here would send the same pending progress twice.
@@ -1868,6 +1932,7 @@ end
 -- Flush the queue, link if needed, and push the open book's progress as soon
 -- as connectivity returns, so nothing read offline waits for a checkpoint.
 function Goodreads:onNetworkConnected()
+    Logging.diag("event: onNetworkConnected")
     self:maybeIdentifyOnReconnect()
     local mapping = self:currentMapping()
     if self:hasDocument() and mapping and mapping.goodreads_id and self:isOnline() then

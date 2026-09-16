@@ -8,6 +8,7 @@ expires, a mapping does not.
 --]]
 
 local Constants = require("goodreadskosync.constants")
+local Logging = require("goodreadskosync.logging")
 local Storage = require("goodreadskosync.storage")
 local Util = require("goodreadskosync.util")
 
@@ -96,7 +97,11 @@ function Search.findCandidates(provider, identity, opts)
 
     if not opts.no_cache then
         local cached = Search.getCached(query, opts.now)
-        if cached then return cached, query end
+        if cached then
+            Logging.diag("search: cache hit query=", tostring(query),
+                " candidates=", tostring(#cached))
+            return cached, query
+        end
     end
 
     local ok, candidates, err = pcall(provider.search_books, provider, query)
@@ -106,6 +111,7 @@ function Search.findCandidates(provider, identity, opts)
     if not candidates then
         return nil, query, err or Constants.ERROR.INVALID_RESPONSE
     end
+    Logging.diag("search: query=", tostring(query), " candidates=", tostring(#candidates))
 
     if not opts.no_cache then
         Search.putCached(query, candidates, opts.now)

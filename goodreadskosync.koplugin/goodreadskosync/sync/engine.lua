@@ -9,6 +9,7 @@ identified: it receives a canonical identity and a local progress snapshot.
 --]]
 
 local Constants = require("goodreadskosync.constants")
+local Logging = require("goodreadskosync.logging")
 local Progress = require("goodreadskosync.sync.progress")
 local Queue = require("goodreadskosync.sync.queue")
 local Rating = require("goodreadskosync.sync.rating")
@@ -67,6 +68,11 @@ function Engine.decide(input)
         actions[#actions + 1] = { type = "rating", rating = input.rating }
     end
 
+    local types = {}
+    for _, action in ipairs(actions) do types[#types + 1] = action.type end
+    Logging.diag("engine.decide pct=", tostring(input.percent), " desired=",
+        tostring(desired_shelf), " current=", tostring(state.shelf),
+        " actions=", (#types > 0 and table.concat(types, ",") or "none"))
     return actions
 end
 
@@ -123,6 +129,10 @@ function Engine.updateState(state, results, now)
         state.last_sync_at = now
         state.last_error = nil
     end
+    Logging.diag("engine.updateState shelf=", tostring(state.shelf),
+        " last_successful_percent=", tostring(state.last_successful_percent),
+        " last_pushed_shelf=", tostring(state.last_pushed_shelf),
+        " error=", tostring(state.last_error))
     return state
 end
 

@@ -15,6 +15,9 @@ local Logging = {}
 local LEVELS = { DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4 }
 
 local current_level = LEVELS.INFO
+-- File/system logging is opt-in: off by default so nothing is written unless the
+-- user enables "Diagnostic logging" in Settings.
+local logging_enabled = false
 local prefix = "[goodreads]"
 
 local ok, klogger = pcall(require, "logger")
@@ -116,6 +119,7 @@ local function append_trace(line)
 end
 
 function Logging.trace(...)
+    if not logging_enabled then return end
     emit("INFO", ...)
     if current_level <= LEVELS.INFO then
         local parts = {}
@@ -125,6 +129,28 @@ function Logging.trace(...)
         append_trace(os.date("%Y-%m-%d %H:%M:%S ")
             .. table.concat(parts, " ") .. "\n")
     end
+end
+
+-- Diagnostics that go ONLY to the local login.log (never the shared KOReader
+-- system log), so troubleshooting can be verbose without flooding anything.
+function Logging.diag(...)
+    if not logging_enabled then return end
+    if current_level > LEVELS.INFO then return end
+    local parts = {}
+    for i = 1, select("#", ...) do
+        parts[#parts + 1] = Logging.redact((select(i, ...)))
+    end
+    append_trace(os.date("%Y-%m-%d %H:%M:%S ") .. "diag: "
+        .. table.concat(parts, " ") .. "\n")
+end
+
+-- Enable/disable file logging (wired to the user's "Diagnostic logging" setting).
+function Logging.setEnabled(value)
+    logging_enabled = value and true or false
+end
+
+function Logging.isEnabled()
+    return logging_enabled
 end
 
 -- Build a support-safe diagnostic summary. Only allowlisted scalar fields are

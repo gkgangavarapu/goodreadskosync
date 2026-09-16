@@ -12,6 +12,7 @@ itself.
 
 local Constants = require("goodreadskosync.constants")
 local Json = require("goodreadskosync.goodreads.json")
+local Logging = require("goodreadskosync.logging")
 
 local Client = {}
 Client.__index = Client
@@ -309,6 +310,8 @@ function Client:get_book_shelves(book_id)
     book_id = tostring(book_id)
     local resp = self.http:get(self.base_url .. "/review/edit/" .. book_id,
         { follow = true, detect_auth = true })
+    Logging.diag("shelves: get book=", book_id, " status=", tostring(resp.status),
+        " url=", tostring(resp.url), " error=", tostring(resp.error))
     if resp.error then return nil, resp.error end
 
     local body = resp.body or ""
@@ -337,6 +340,9 @@ function Client:set_shelf(book_id, shelf)
         a = "",
         authenticity_token = csrf,
     }, { csrf = true, follow = true, detect_auth = true })
+    Logging.diag("shelf: post book=", tostring(book_id), " shelf=", tostring(shelf),
+        " status=", tostring(resp.status), " url=", tostring(resp.url),
+        " error=", tostring(resp.error))
     if resp.error then return false, resp.error end
     return true, nil
 end
@@ -383,6 +389,19 @@ function Client:update_progress(book_id, value, unit, note)
 
     local resp = self.http:post_form(self.base_url .. "/user_status.json", body,
         { csrf = true, follow = true, detect_auth = true })
+    Logging.diag("progress: post book=", tostring(book_id), " unit=", tostring(unit),
+        " value=", tostring(value), " status=", tostring(resp.status),
+        " url=", tostring(resp.url), " error=", tostring(resp.error))
+    if resp.error == Constants.ERROR.NOT_FOUND then
+        -- 404 here means the book isn't on the user's shelves; re-assert
+        -- Currently Reading (idempotent) and retry once before giving up.
+        Logging.diag("progress: NOT_FOUND -> re-assert currently-reading, retry")
+        self:set_shelf(book_id, Constants.SHELF.CURRENTLY_READING)
+        resp = self.http:post_form(self.base_url .. "/user_status.json", body,
+            { csrf = true, follow = true, detect_auth = true })
+        Logging.diag("progress: retry status=", tostring(resp.status),
+            " url=", tostring(resp.url), " error=", tostring(resp.error))
+    end
     if resp.error then return false, resp.error end
     return true, value
 end

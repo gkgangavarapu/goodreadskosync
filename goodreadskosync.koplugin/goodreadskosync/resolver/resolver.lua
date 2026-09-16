@@ -9,6 +9,7 @@ act on. It never silently accepts a low-confidence title/author match.
 --]]
 
 local Identifiers = require("goodreadskosync.resolver.identifiers")
+local Logging = require("goodreadskosync.logging")
 local Matcher = require("goodreadskosync.resolver.matcher")
 local Search = require("goodreadskosync.resolver.search")
 
@@ -44,6 +45,8 @@ function Resolver.resolve(opts)
     if not opts.ignore_mapping and opts.mappings and opts.mappings.get then
         local mapping = opts.mappings.get(local_key)
         if mapping and mapping.confirmed then
+            Logging.diag("resolver: mapped local_key=", tostring(local_key),
+                " gid=", tostring(mapping.goodreads_id))
             return {
                 status = "mapped",
                 identity = identity,
@@ -83,6 +86,9 @@ function Resolver.resolve(opts)
 
     local ranked = Matcher.rank(identity, candidates)
     local best = Matcher.bestAutomatic(ranked)
+    Logging.diag("resolver: query=", tostring(query), " candidates=", tostring(#ranked),
+        " best=", tostring(best and best.goodreads_id),
+        " best_decision=", tostring(best and best.decision or (ranked[1] and ranked[1].decision)))
     if best then
         return {
             status = "auto",

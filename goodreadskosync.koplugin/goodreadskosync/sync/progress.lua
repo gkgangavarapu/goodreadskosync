@@ -8,6 +8,7 @@ settings are only a fallback. Progress is always sent as a whole number.
 --]]
 
 local Util = require("goodreadskosync.util")
+local Logging = require("goodreadskosync.logging")
 
 local Progress = {}
 
@@ -46,8 +47,15 @@ end
 -- Only sync when the whole-number percent actually changed, and never send a
 -- zero percent (opening a book is not reading).
 function Progress.shouldSync(state, whole_percent)
-    if type(whole_percent) ~= "number" or whole_percent <= 0 then return false end
-    return state == nil or state.last_successful_percent ~= whole_percent
+    if type(whole_percent) ~= "number" or whole_percent <= 0 then
+        Logging.diag("progress.shouldSync pct=", tostring(whole_percent), "-> false")
+        return false
+    end
+    local last = state and state.last_successful_percent
+    local ok = state == nil or last ~= whole_percent
+    Logging.diag("progress.shouldSync last=", tostring(last), " pct=",
+        tostring(whole_percent), "-> ", tostring(ok))
+    return ok
 end
 
 -- Update state only after a confirmed provider success.

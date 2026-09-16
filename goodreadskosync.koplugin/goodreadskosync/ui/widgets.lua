@@ -7,6 +7,7 @@ Shared UI widgets.
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
+local Size = require("ui/size")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 
@@ -44,6 +45,9 @@ function Widgets.notify(text, timeout)
         UIManager:show(Notification:new{
             text = branded,
             timeout = timeout or 3,
+            -- Keep toasts small and unobtrusive.
+            margin = Size.margin.small,
+            padding = Size.padding.small,
         })
     else
         UIManager:show(InfoMessage:new{

@@ -97,6 +97,17 @@ This is a testing convenience only: KOReader has no secure keystore. Turn it off
             checked_func = checked("auto_update_check"),
             callback = toggle("auto_update_check"),
         },
+        {
+            text = _("Diagnostic logging (support)"),
+            help_text = _("Write detailed sync logs to the plugin's login.log for troubleshooting. Off by default."),
+            checked_func = checked("logging"),
+            callback = function()
+                local enabled = not plugin:getSetting("logging")
+                plugin:setSetting("logging", enabled)
+                require("goodreadskosync.logging").setEnabled(enabled)
+                Widgets.notify(enabled and _("Logging on") or _("Logging off"))
+            end,
+        },
     }
 end
 
