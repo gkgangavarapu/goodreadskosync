@@ -377,29 +377,31 @@ function Client:update_progress(book_id, value, unit, note)
 
     local body = {
         ["user_status[book_id]"] = tostring(book_id),
+        ["user_status[body]"] = note or "",
+        authenticity_token = csrf,
     }
     if unit == "pages" then
         body["user_status[page]"] = tostring(value)
     else
         body["user_status[percent]"] = tostring(value)
     end
-    if note and note ~= "" then
-        body["user_status[body]"] = note
+
+    local function post(path)
+        return self.http:post_form(self.base_url .. path, body, {
+            csrf = true,
+            follow = true,
+            detect_auth = true,
+            headers = { ["Accept"] = "application/json, text/javascript, */*; q=0.01" },
+        })
     end
 
-    local resp = self.http:post_form(self.base_url .. "/user_status.json", body,
-        { csrf = true, follow = true, detect_auth = true })
+    local resp = post("/user_status.json")
     Logging.diag("progress: post book=", tostring(book_id), " unit=", tostring(unit),
         " value=", tostring(value), " status=", tostring(resp.status),
         " url=", tostring(resp.url), " error=", tostring(resp.error))
     if resp.error == Constants.ERROR.NOT_FOUND then
-        -- 404 here means the book isn't on the user's shelves; re-assert
-        -- Currently Reading (idempotent) and retry once before giving up.
-        Logging.diag("progress: NOT_FOUND -> re-assert currently-reading, retry")
-        self:set_shelf(book_id, Constants.SHELF.CURRENTLY_READING)
-        resp = self.http:post_form(self.base_url .. "/user_status.json", body,
-            { csrf = true, follow = true, detect_auth = true })
-        Logging.diag("progress: retry status=", tostring(resp.status),
+        resp = post("/user_status")
+        Logging.diag("progress: fallback status=", tostring(resp.status),
             " url=", tostring(resp.url), " error=", tostring(resp.error))
     end
     if resp.error then return false, resp.error end

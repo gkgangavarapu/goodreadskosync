@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-09-16
+
+### Fixed
+
+- **Reading progress syncs again.** The progress request now sends the CSRF token
+  in the request body (Goodreads began rejecting the header-only request with a
+  404), and always includes the status body field.
+
 ## [1.11.1] - 2026-09-16
 
 ### Fixed
