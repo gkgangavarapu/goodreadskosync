@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.11.3] - 2026-09-16
+
+### Fixed
+
+- **Syncing works again (progress, shelf, rating, remove).** The plugin now
+  fetches a fresh CSRF token before every write; Goodreads rotates the token, and
+  a stale one made it reject writes with `404`.
+
 ## [1.11.2] - 2026-09-16
 
 ### Fixed

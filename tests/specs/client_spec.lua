@@ -18,6 +18,10 @@ local REVIEW_EDIT = [[<html><body>
 <input name="review[rating]" value="4">
 </body></html>]]
 
+-- Every write first GETs a normal app page to refresh the CSRF token.
+local CSRF_PAGE = [[<html><head><meta name="csrf-token" content="C"></head>
+<body><a href="/user/show/999">me</a></body></html>]]
+
 local function client_with(responses)
     local transport, calls = FakeHttp.scripted(responses)
     local http = Http:new{ transport = transport }
@@ -51,35 +55,31 @@ describe("goodreads.client", function()
     end)
 
     it("writes a shelf with the CSRF token", function()
-        local client, http, calls = client_with({ { status = 200 } })
-        http.csrf_token = "C"
+        local client, _, calls = client_with({ { status = 200, body = CSRF_PAGE }, { status = 200 } })
         assert_true(client:set_shelf("42", Constants.SHELF.CURRENTLY_READING))
-        assert_true(calls[1].url:find("/shelf/add_to_shelf", 1, true) ~= nil)
-        assert_true(calls[1].body:find("book_id=42", 1, true) ~= nil)
-        assert_true(calls[1].body:find("name=currently%-reading") ~= nil)
-        assert_equal("C", calls[1].headers["X-CSRF-Token"])
+        assert_true(calls[2].url:find("/shelf/add_to_shelf", 1, true) ~= nil)
+        assert_true(calls[2].body:find("book_id=42", 1, true) ~= nil)
+        assert_true(calls[2].body:find("name=currently%-reading") ~= nil)
+        assert_equal("C", calls[2].headers["X-CSRF-Token"])
     end)
 
     it("writes progress as a percent only", function()
-        local client, http, calls = client_with({ { status = 200 } })
-        http.csrf_token = "C"
+        local client, _, calls = client_with({ { status = 200, body = CSRF_PAGE }, { status = 200 } })
         assert_true(client:update_progress("42", 67.4))
-        assert_true(calls[1].body:find("user_status%5Bpercent%5D=67", 1, true) ~= nil)
-        assert_nil(calls[1].body:find("user_status%5Bpage%5D", 1, true))
+        assert_true(calls[2].body:find("user_status%5Bpercent%5D=67", 1, true) ~= nil)
+        assert_nil(calls[2].body:find("user_status%5Bpage%5D", 1, true))
     end)
 
     it("sets a rating via the review endpoint", function()
-        local client, http, calls = client_with({ { status = 204 } })
-        http.csrf_token = "C"
+        local client, _, calls = client_with({ { status = 200, body = CSRF_PAGE }, { status = 204 } })
         assert_true(client:set_rating("42", 4))
-        assert_true(calls[1].url:find("rating=4", 1, true) ~= nil)
+        assert_true(calls[2].url:find("rating=4", 1, true) ~= nil)
     end)
 
     it("removes a shelf", function()
-        local client, http, calls = client_with({ { status = 200 } })
-        http.csrf_token = "C"
+        local client, _, calls = client_with({ { status = 200, body = CSRF_PAGE }, { status = 200 } })
         assert_true(client:remove_shelf("42"))
-        assert_true(calls[1].url:find("/review/destroy/42", 1, true) ~= nil)
+        assert_true(calls[2].url:find("/review/destroy/42", 1, true) ~= nil)
     end)
 
     it("reads shelf and rating state", function()
