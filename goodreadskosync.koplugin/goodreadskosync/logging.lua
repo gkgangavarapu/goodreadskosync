@@ -93,9 +93,14 @@ function Logging.error(...) emit("ERROR", ...) end
 -- settings, so a failed on-device login can always be diagnosed over USB
 -- regardless of how KOReader persists its own log.
 local function trace_path()
-    local has_storage, Storage = pcall(require, "storage")
-    local dir = has_storage and Storage.getBaseDir() or "."
-    return dir .. "/login.log"
+    local has_ds, DataStorage = pcall(require, "datastorage")
+    if has_ds and DataStorage and type(DataStorage.getSettingsDir) == "function" then
+        local got, dir = pcall(function() return DataStorage:getSettingsDir() end)
+        if got and dir and dir ~= "" then
+            return dir .. "/goodreadskosync/login.log"
+        end
+    end
+    return "./login.log"
 end
 
 local function append_trace(line)
