@@ -502,4 +502,17 @@ function Util.countKeys(t)
     return n
 end
 
+-- Short book label for toasts (kept brief; never splits a UTF-8 character).
+function Util.shortTitle(title)
+    if type(title) ~= "string" or title == "" then return nil end
+    if #title <= 28 then return title end
+    local cut = 28
+    while cut > 1 do
+        local b = title:byte(cut + 1)
+        if not b or b < 0x80 or b >= 0xC0 then break end
+        cut = cut - 1
+    end
+    return title:sub(1, cut) .. "…"
+end
+
 return Util

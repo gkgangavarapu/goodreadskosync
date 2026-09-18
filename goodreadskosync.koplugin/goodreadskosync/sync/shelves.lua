@@ -5,8 +5,19 @@ Canonical shelf policy.
 --]]
 
 local Constants = require("goodreadskosync.constants")
+-- gettext is only available inside KOReader; fall back to identity for tests.
+local ok_gettext, _ = pcall(require, "gettext")
+if not ok_gettext then _ = function(s) return s end end
 
 local Shelves = {}
+
+-- Short verb for a shelf change, used in sync toasts.
+Shelves.VERB = {
+    [Constants.SHELF.READ] = _("Marked Read"),
+    [Constants.SHELF.CURRENTLY_READING] = _("Now reading"),
+    [Constants.SHELF.WANT_TO_READ] = _("Want to Read"),
+    [Constants.SHELF.DID_NOT_FINISH] = _("Did Not Finish"),
+}
 
 function Shelves.isValid(shelf)
     return shelf == Constants.SHELF.WANT_TO_READ
