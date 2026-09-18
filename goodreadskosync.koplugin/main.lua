@@ -772,14 +772,14 @@ end
 
 function Goodreads:_syncNow()
     Logging.diag("event: syncNow")
-    if not self:hasDocument() then
-        Widgets.message(_("Open a book first."))
-        return
-    end
     if self._sync_busy then
         -- A background sync is already running; fold this into a follow-up.
         self._sync_queued = true
         Widgets.notify(_("Syncing…"), 2)
+        return
+    end
+    if not self:hasDocument() then
+        self:_syncPending()
         return
     end
     local inputs = self:syncInputs({ force_remote = true })
@@ -803,6 +803,74 @@ function Goodreads:_syncNow()
             self:syncSilently()
         end
     end)
+end
+
+-- "Sync now" with no book open: flush the queue, then push any linked book
+-- whose local progress advanced beyond what was last synced.
+function Goodreads:_syncPending()
+    self._sync_busy = true
+    self:runAsync(function()
+        local completed, summary = self:runInBackground(
+            _("Syncing with Goodreads…"),
+            function() return self:_syncPendingCore() end)
+        self._sync_busy = false
+        if completed == false then
+            self._sync_queued = false
+            return
+        end
+        if not summary or not summary.ok then
+            Widgets.message(_("Sync failed."))
+        elseif summary.changed then
+            Widgets.message(_("Progress synced to Goodreads."))
+        else
+            Widgets.message(_("Nothing to sync."))
+        end
+        if self._sync_queued then
+            self._sync_queued = false
+            self:syncSilently()
+        end
+    end)
+end
+
+function Goodreads:_syncPendingCore()
+    local provider = self:getProvider()
+    if not provider then return { ok = false, error = Constants.ERROR.PROVIDER_UNAVAILABLE } end
+    -- Flush anything already queued (progress, notes, shelves, ratings).
+    self:processQueueCore()
+
+    local sent, failed, changed = 0, 0, false
+    for key, mapping in pairs(Mappings.all()) do
+        local gid = mapping.goodreads_id
+        local lk = mapping.local_key or key
+        if gid and lk and self:isBookSyncEnabled(lk) then
+            local state = State.get(lk)
+            local local_pct = tonumber(state.last_local_percent)
+            local cloud_pct = tonumber(state.last_successful_percent) or 0
+            if local_pct and local_pct > 0 and local_pct ~= cloud_pct then
+                local ok, err = provider:update_progress(gid, local_pct, "percent")
+                if ok then
+                    state.last_successful_percent = local_pct
+                    state.last_cloud_percent = local_pct
+                    State.set(lk, state)
+                    sent = sent + 1
+                    changed = true
+                else
+                    Queue.enqueue({
+                        operation = "progress",
+                        book_id = gid,
+                        local_key = lk,
+                        payload = { type = "progress", percent = local_pct,
+                            value = local_pct, unit = "percent" },
+                    })
+                    failed = failed + 1
+                    Logging.diag("syncPending: failed book=", tostring(gid),
+                        " error=", tostring(err))
+                end
+            end
+        end
+    end
+    Logging.diag("syncPending: sent=", tostring(sent), " failed=", tostring(failed))
+    return { ok = true, changed = changed, sent = sent, failed = failed }
 end
 
 -- Short book label for toasts (kept brief; never splits a UTF-8 character).
@@ -1010,6 +1078,9 @@ function Goodreads:processQueueCore()
             end
         elseif op.operation == "rating" then
             ok, err = provider:set_rating(op.book_id, op.payload.rating)
+        elseif op.operation == "note" then
+            ok, err = provider:update_progress(op.book_id,
+                op.payload.value or op.payload.percent, op.payload.unit, op.payload.note)
         end
         if drop then
             Logging.diag("processQueue: drop stale progress book=", tostring(op.book_id))
@@ -1732,16 +1803,41 @@ end
 
 function Goodreads:postNote(note)
     if not note or note == "" then return end
-    local mapping = self:currentMapping()
+    local mapping, identity = self:currentMapping()
     if not mapping or not mapping.goodreads_id then return end
+    local local_key = identity and identity.local_key
     local percent = self:currentPercent() or 0
+    local payload = {
+        type = "note", note = note, percent = percent,
+        value = percent, unit = "percent",
+    }
+    -- Offline: save it; the queue posts it once we're back online.
+    if not self:isOnline() then
+        Queue.enqueue({
+            operation = "note",
+            book_id = mapping.goodreads_id,
+            local_key = local_key,
+            payload = payload,
+        })
+        Widgets.notify(_("Note saved · will post when online"))
+        return
+    end
     local provider = self:getProvider()
     self:runAsync(function()
         local completed, ok = self:runInBackground(_("Posting note…"), function()
-            return provider:update_progress(mapping.goodreads_id, percent, "percent", note)
+            local res = provider:update_progress(mapping.goodreads_id, percent, "percent", note)
+            if not res then
+                Queue.enqueue({
+                    operation = "note",
+                    book_id = mapping.goodreads_id,
+                    local_key = local_key,
+                    payload = payload,
+                })
+            end
+            return res
         end)
         if completed == false then return end
-        Widgets.notify(ok and _("Note posted") or _("Note failed"))
+        Widgets.notify(ok and _("Note posted") or _("Note saved · will post when online"))
     end)
 end
 
@@ -2267,17 +2363,12 @@ function Goodreads:buildMenu()
     return {
         {
             text = _("Sync now"),
-            enabled_func = function() return self:hasDocument() end,
             callback = function() self:syncNow() end,
         },
         {
             text = _("Set status on Goodreads"),
             enabled_func = function() return self:hasDocument() end,
             sub_item_table_func = function() return self:setStatusMenuItems() end,
-        },
-        {
-            text = _("Browse shelves"),
-            callback = function() LibraryUI.show(self) end,
         },
         {
             text = _("Support this project"),

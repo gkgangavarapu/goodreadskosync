@@ -34,7 +34,9 @@ end
 -- multiple events don't stack toasts.
 local last_notify_text, last_notify_at
 function Widgets.notify(text, timeout)
-    local branded = brand(text)
+    -- Toasts stay quiet and unbranded: just the book/action detail.
+    local branded = tostring(text or "")
+    if branded == "" then return end
     local now = os.time()
     if branded == last_notify_text and last_notify_at and now - last_notify_at < 2 then
         return

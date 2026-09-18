@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Sync now** works with no book open: it flushes the queue and pushes any linked
+  book whose local progress advanced.
+- **Notes to Goodreads** are saved offline and posted automatically when online.
+- Toasts no longer prefix the plugin name; they show just the book/action detail.
+- **Browse shelves** is hidden from the menu for now.
+
 ## [1.11.3] - 2026-09-16
 
 ### Fixed
