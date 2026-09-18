@@ -17,6 +17,7 @@ local IdentifyUI = require("goodreadskosync.ui.identify")
 local InfoMessage = require("ui/widget/infomessage")
 local LibraryUI = require("goodreadskosync.ui.library")
 local Logging = require("goodreadskosync.logging")
+local Tasks = require("goodreadskosync.tasks")
 local Mappings = require("goodreadskosync.mappings")
 local Metadata = require("goodreadskosync.metadata")
 local Progress = require("goodreadskosync.sync.progress")
@@ -500,103 +501,18 @@ function Goodreads:syncNow()
     self:runWhenOnline(function() self:_syncNow() end)
 end
 
--- Run a network-only task off the UI thread when possible (ShelfSync-style),
--- falling back to a blocking run when not in a coroutine.
--- Returns completed, <task results>.
+-- Background task helpers live in goodreadskosync/tasks.lua and are reused.
 function Goodreads:runInBackground(text, task)
-    -- Silent/background syncs (text == nil) must NOT be interruptible: the
-    -- Trapper variant shows a modal widget that dismisses on any tap, which
-    -- aborted the close/reconnect flush. Use a non-dismissable runner instead.
-    if text == nil then
-        return self:runInBackgroundNoTrap(task)
-    end
-    local ok, Trapper = pcall(require, "ui/trapper")
-    if ok and Trapper and type(Trapper.dismissableRunInSubprocess) == "function" then
-        local completed, a, b, c = Trapper:dismissableRunInSubprocess(task, text)
-        return completed, a, b, c
-    end
-    local ok2, a, b, c = pcall(task)
-    if not ok2 then
-        Logging.warn("background task failed")
-        return true, nil
-    end
-    return true, a, b, c
+    return Tasks.run(text, task)
 end
 
--- Like Trapper:dismissableRunInSubprocess but without any trap widget, so it
--- cannot be dismissed by a tap/key. Serializes the return values via
--- string.buffer (the same mechanism Trapper uses).
 function Goodreads:runInBackgroundNoTrap(task)
-    local ok_ffi, ffiutil = pcall(require, "ffi/util")
-    local ok_buf, buffer = pcall(require, "string.buffer")
-    local _coroutine = coroutine.running()
-    if not (ok_ffi and ffiutil and ffiutil.runInSubProcess
-        and ok_buf and buffer and _coroutine) then
-        local ran, a, b, c = pcall(task)
-        if not ran then
-            Logging.warn("background task failed")
-            return true, nil
-        end
-        return true, a, b, c
-    end
-
-    local pid, parent_read_fd = ffiutil.runInSubProcess(function(_, child_write_fd)
-        -- selene: allow(incorrect_standard_library_use)
-        local results = table.pack(task())
-        local ok, str = pcall(buffer.encode, results)
-        ffiutil.writeToFD(child_write_fd, ok and str or "", true)
-    end, true)
-    if not pid then
-        local ran, a, b, c = pcall(task)
-        if not ran then return true, nil end
-        return true, a, b, c
-    end
-
-    local completed, ret_values = false, nil
-    local check_interval_sec = 0.125
-    while true do
-        local go_on_func = function() coroutine.resume(_coroutine, true) end
-        UIManager:scheduleIn(check_interval_sec, go_on_func)
-        coroutine.yield()
-        local subprocess_done = ffiutil.isSubProcessDone(pid)
-        local stuff_to_read = parent_read_fd
-            and ffiutil.getNonBlockingReadSize(parent_read_fd) ~= 0
-        if subprocess_done or stuff_to_read then
-            completed = true
-            if stuff_to_read then
-                local ret_str = ffiutil.readAllFromFD(parent_read_fd)
-                local ok, t = pcall(buffer.decode, ret_str)
-                if ok and t then ret_values = t end
-                if not subprocess_done then
-                    local collect_and_clean
-                    collect_and_clean = function()
-                        if ffiutil.isSubProcessDone(pid) then return end
-                        UIManager:scheduleIn(1, collect_and_clean)
-                    end
-                    UIManager:scheduleIn(1, collect_and_clean)
-                end
-            elseif parent_read_fd then
-                ffiutil.readAllFromFD(parent_read_fd)
-            end
-            break
-        end
-    end
-    if ret_values then
-        return completed, unpack(ret_values, 1, ret_values.n)
-    end
-    return completed
+    return Tasks.runSilent(task)
 end
 
--- Run `fn` in a Trapper coroutine so runInBackground can actually fork a
--- subprocess (and so UI updates after the yield still work). Falls back to a
--- direct call when Trapper is unavailable.
+-- Run `fn` in a Trapper coroutine so runInBackground can fork a subprocess.
 function Goodreads:runAsync(fn)
-    local ok, Trapper = pcall(require, "ui/trapper")
-    if ok and Trapper and type(Trapper.wrap) == "function" then
-        Trapper:wrap(fn)
-    else
-        fn()
-    end
+    Tasks.runAsync(fn)
 end
 
 -- Gather the local inputs (fast, in-process) for a sync.
