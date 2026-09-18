@@ -12,6 +12,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Automatic syncs (open/close/reconnect) no longer abort when you tap the
   screen; the close/reconnect queue flush now runs to completion.
+- Automatic open/reconnect syncs now show a toast when they send a queued item.
 - **Sync now** works with no book open, and respects sticky Read / Did Not Finish.
 - A fetched CSRF token is reused for a short window instead of refetching on
   every write.

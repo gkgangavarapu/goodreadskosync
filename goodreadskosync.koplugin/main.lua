@@ -811,7 +811,9 @@ function Goodreads:_syncCore(inputs)
             " ok=", tostring(result.ok), " error=", tostring(result.error))
     end
     State.set(inputs.local_key, new_state)
-    self:processQueueCore()
+    -- Flush the queue and fold its result into the summary, so an automatic
+    -- open/reconnect sync that sends a queued item still shows a toast.
+    local flush = self:processQueueCore()
 
     local summary = {
         ok = true,
@@ -836,6 +838,9 @@ function Goodreads:_syncCore(inputs)
                 summary.auth_expired = true
             end
         end
+    end
+    if flush and (flush.sent or 0) > 0 then
+        summary.changed = true
     end
     return summary
 end
