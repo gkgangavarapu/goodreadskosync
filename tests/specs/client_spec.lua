@@ -1,4 +1,4 @@
-local Client = require("goodreadskosync.goodreads.client")
+local Api = require("goodreadskosync.goodreads.api")
 local Constants = require("goodreadskosync.constants")
 local FakeHttp = require("support.fake_http")
 local Http = require("goodreadskosync.goodreads.http")
@@ -25,10 +25,10 @@ local CSRF_PAGE = [[<html><head><meta name="csrf-token" content="C"></head>
 local function client_with(responses)
     local transport, calls = FakeHttp.scripted(responses)
     local http = Http:new{ transport = transport }
-    return Client:new(http), http, calls
+    return Api:new(http), http, calls
 end
 
-describe("goodreads.client", function()
+describe("goodreads.api", function()
     it("normalizes auto-complete search results", function()
         local client = client_with({ { status = 200, body = AUTO_COMPLETE } })
         local results, err = client:search_books("sapiens")

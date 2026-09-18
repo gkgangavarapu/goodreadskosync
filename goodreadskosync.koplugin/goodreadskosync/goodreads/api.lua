@@ -7,15 +7,15 @@ configured `goodreads.http` object (with a session cookie) and returns the
 plugin's canonical structures. UI code must never build Goodreads requests
 itself.
 
-@module koplugin.goodreads.goodreads.client
+@module koplugin.goodreads.goodreads.api
 --]]
 
 local Constants = require("goodreadskosync.constants")
 local Json = require("goodreadskosync.goodreads.json")
 local Logging = require("goodreadskosync.logging")
 
-local Client = {}
-Client.__index = Client
+local Api = {}
+Api.__index = Api
 
 local SHELF_SLUG = {
     [Constants.SHELF.WANT_TO_READ] = "to-read",
@@ -31,7 +31,7 @@ local SHELF_FROM_SLUG = {
     ["did-not-finish"] = Constants.SHELF.DID_NOT_FINISH,
 }
 
-function Client:new(http)
+function Api:new(http)
     return setmetatable({
         http = http,
         base_url = http.base_url or "https://www.goodreads.com",
@@ -59,7 +59,7 @@ end
 -- found". Reuse a freshly fetched token for a short window (so a sync run does
 -- one fetch), but refresh it once it is older than CSRF_TTL.
 -- (/review/list is server-rendered and not WAF-challenged, unlike "/".)
-function Client:ensure_csrf()
+function Api:ensure_csrf()
     local now = os.time()
     local ttl = Constants.CSRF_TTL or 120
     if self.http.csrf_token and self.http.csrf_token ~= ""
@@ -79,7 +79,7 @@ function Client:ensure_csrf()
     return csrf
 end
 
-function Client:get_account()
+function Api:get_account()
     if not self.http.user_id then
         local _, err = self:ensure_csrf()
         if err then return nil, err end
@@ -107,7 +107,7 @@ local function annotate_query_identifier(results, query)
     return results
 end
 
-function Client:search_books(query)
+function Api:search_books(query)
     if type(query) ~= "string" or query == "" then
         return {}, nil
     end
@@ -150,7 +150,7 @@ local function parse_ldjson_book(html)
     }
 end
 
-function Client:get_book(book_id)
+function Api:get_book(book_id)
     if not book_id then return nil, Constants.ERROR.INVALID_REQUEST end
     book_id = tostring(book_id)
     local resp = self.http:get(self.base_url .. "/book/show/" .. book_id,
@@ -172,7 +172,7 @@ function Client:get_book(book_id)
     }, nil
 end
 
-function Client:get_shelves()
+function Api:get_shelves()
     -- Goodreads' canonical exclusive shelves are fixed.
     return {
         { slug = "to-read", shelf = Constants.SHELF.WANT_TO_READ, name = "Want to Read" },
@@ -194,7 +194,7 @@ local DEFAULT_SHELVES = {
 -- Returns a list of { slug, name, custom, count }, or nil when nothing could be
 -- parsed. Custom shelves are addressed later with `tag=<name>`; default shelves
 -- with `shelf=<slug>`.
-function Client:get_user_shelves()
+function Api:get_user_shelves()
     local resp = self.http:get(self.base_url .. "/review/list", { follow = true, detect_auth = true })
     if resp.error then return nil, resp.error end
     local body = resp.body or ""
@@ -239,7 +239,7 @@ end
 
 -- Books on one shelf (one page of up to 100). `shelf` is a { slug, custom }
 -- table or a plain shelf name. Returns books, has_more.
-function Client:get_shelf_books(shelf, page)
+function Api:get_shelf_books(shelf, page)
     if not shelf then return nil, false end
     local name, custom
     if type(shelf) == "table" then
@@ -294,7 +294,7 @@ function Client:get_shelf_books(shelf, page)
 end
 
 -- Add/move a book to an arbitrary shelf slug.
-function Client:add_to_shelf(book_id, slug)
+function Api:add_to_shelf(book_id, slug)
     if not book_id or not slug then return false, Constants.ERROR.INVALID_REQUEST end
     local csrf, err = self:ensure_csrf()
     if not csrf then return false, err end
@@ -311,11 +311,11 @@ end
 -- Whole library as a shelf list (metadata only; books are loaded per shelf on
 -- demand to keep each request small): { { slug, name, custom, count }, ... }.
 -- Returns nil when nothing could be parsed (caller falls back to local data).
-function Client:get_library()
+function Api:get_library()
     return self:get_user_shelves()
 end
 
-function Client:get_book_shelves(book_id)
+function Api:get_book_shelves(book_id)
     if not book_id then return nil, Constants.ERROR.INVALID_REQUEST end
     book_id = tostring(book_id)
     local resp = self.http:get(self.base_url .. "/review/edit/" .. book_id,
@@ -336,7 +336,7 @@ function Client:get_book_shelves(book_id)
     }, nil
 end
 
-function Client:set_shelf(book_id, shelf)
+function Api:set_shelf(book_id, shelf)
     local slug = SHELF_SLUG[shelf]
     if not slug then return false, Constants.ERROR.INVALID_REQUEST end
     if not book_id then return false, Constants.ERROR.INVALID_REQUEST end
@@ -357,7 +357,7 @@ function Client:set_shelf(book_id, shelf)
     return true, nil
 end
 
-function Client:remove_shelf(book_id)
+function Api:remove_shelf(book_id)
     if not book_id then return false, Constants.ERROR.INVALID_REQUEST end
     local csrf, err = self:ensure_csrf()
     if not csrf then return false, err end
@@ -373,7 +373,7 @@ function Client:remove_shelf(book_id)
     return true, nil
 end
 
-function Client:update_progress(book_id, value, unit, note)
+function Api:update_progress(book_id, value, unit, note)
     if not book_id then return false, Constants.ERROR.INVALID_REQUEST end
     value = tonumber(value)
     if not value then return false, Constants.ERROR.INVALID_REQUEST end
@@ -418,25 +418,25 @@ function Client:update_progress(book_id, value, unit, note)
     return true, value
 end
 
-function Client:mark_read(book_id)
+function Api:mark_read(book_id)
     return self:set_shelf(book_id, Constants.SHELF.READ)
 end
 
-function Client:mark_currently_reading(book_id)
+function Api:mark_currently_reading(book_id)
     return self:set_shelf(book_id, Constants.SHELF.CURRENTLY_READING)
 end
 
-function Client:mark_want_to_read(book_id)
+function Api:mark_want_to_read(book_id)
     return self:set_shelf(book_id, Constants.SHELF.WANT_TO_READ)
 end
 
-function Client:get_rating(book_id)
+function Api:get_rating(book_id)
     local state, err = self:get_book_shelves(book_id)
     if not state then return nil, err end
     return state.rating
 end
 
-function Client:set_rating(book_id, rating)
+function Api:set_rating(book_id, rating)
     if not book_id then return false, Constants.ERROR.INVALID_REQUEST end
     local value = tonumber(rating)
     if not value or value < 1 or value > 5 then
@@ -459,7 +459,7 @@ function Client:set_rating(book_id, rating)
     return true, value
 end
 
-Client._parse_ldjson_book = parse_ldjson_book
-Client.SHELF_SLUG = SHELF_SLUG
+Api._parse_ldjson_book = parse_ldjson_book
+Api.SHELF_SLUG = SHELF_SLUG
 
-return Client
+return Api

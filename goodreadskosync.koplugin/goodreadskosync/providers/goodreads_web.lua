@@ -1,7 +1,7 @@
 --[[--
 Primary Goodreads provider (web session).
 
-Implements the provider interface by delegating to `goodreads.client` using the
+Implements the provider interface by delegating to `goodreads.api` using the
 session stored by `auth.session`. It performs no authentication mechanics
 itself: interactive login is owned by `auth.manager` / `auth.login`, and this
 provider simply reports whether a usable session exists.
@@ -10,7 +10,7 @@ provider simply reports whether a usable session exists.
 --]]
 
 local Base = require("goodreadskosync.providers.base")
-local Client = require("goodreadskosync.goodreads.client")
+local Api = require("goodreadskosync.goodreads.api")
 local Constants = require("goodreadskosync.constants")
 local Logging = require("goodreadskosync.logging")
 local Session = require("goodreadskosync.auth.session")
@@ -63,7 +63,7 @@ function GoodreadsWeb:_with_client(fn, opts)
         return nil, Constants.ERROR.AUTH_REQUIRED
     end
     local http = Session.to_http(session, { transport = self.transport })
-    local client = Client:new(http)
+    local client = Api:new(http)
 
     local ok, a, b, c = pcall(fn, client)
     Session.absorb(session, http)
