@@ -1759,7 +1759,7 @@ function Goodreads:registerHighlight()
     self.ui.highlight:removeFromHighlightDialog("goodreads_note")
     self.ui.highlight:addToHighlightDialog("goodreads_note", function(this)
         return {
-            text = _("Goodreads KO Sync: Add note"),
+            text = _("Add note to Goodreads"),
             enabled_func = function()
                 return self:hasDocument() and self:currentMapping() ~= nil
             end,
