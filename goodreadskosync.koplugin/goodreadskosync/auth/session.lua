@@ -21,6 +21,7 @@ function Session.new()
     return {
         cookies = "",
         csrf_token = nil,
+        csrf_at = nil,
         user_id = nil,
         username = nil,
         state = "unknown", -- unknown | valid | expired | blocked
@@ -91,6 +92,7 @@ end
 function Session.absorb(session, http)
     session.cookies = http:get_cookie_header()
     if http.csrf_token then session.csrf_token = http.csrf_token end
+    if http.csrf_at then session.csrf_at = http.csrf_at end
     if http.user_id then session.user_id = http.user_id end
     return session
 end
@@ -99,7 +101,7 @@ end
 function Session.to_http(session, opts)
     local Http = require("goodreadskosync.goodreads.http")
     opts = opts or {}
-    return Http:new{
+    local http = Http:new{
         cookies = session and session.cookies or "",
         csrf_token = session and session.csrf_token or nil,
         user_id = session and session.user_id or nil,
@@ -107,6 +109,8 @@ function Session.to_http(session, opts)
         timeout = opts.timeout,
         transport = opts.transport,
     }
+    http.csrf_at = session and session.csrf_at or nil
+    return http
 end
 
 return Session

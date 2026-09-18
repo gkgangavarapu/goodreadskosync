@@ -6,10 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.11.5] - 2026-09-18
+
+### Fixed
+
+- Automatic syncs (open/close/reconnect) no longer abort when you tap the
+  screen; the close/reconnect queue flush now runs to completion.
+- **Sync now** works with no book open, and respects sticky Read / Did Not Finish.
+- A fetched CSRF token is reused for a short window instead of refetching on
+  every write.
+
 ### Changed
 
-- **Sync now** works with no book open: it flushes the queue and pushes any linked
-  book whose local progress advanced.
 - **Notes to Goodreads** are saved offline and posted automatically when online.
 - Toasts no longer prefix the plugin name; they show just the book/action detail.
 - **Browse shelves** is hidden from the menu for now.

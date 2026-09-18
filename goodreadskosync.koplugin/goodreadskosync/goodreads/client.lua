@@ -56,18 +56,26 @@ end
 
 -- A CSRF token is required for every write, and Goodreads rotates it: a token
 -- cached from login becomes stale and writes then fail with 404 "Page not
--- found". So always fetch a fresh token from a normal app page before writing.
+-- found". Reuse a freshly fetched token for a short window (so a sync run does
+-- one fetch), but refresh it once it is older than CSRF_TTL.
 -- (/review/list is server-rendered and not WAF-challenged, unlike "/".)
 function Client:ensure_csrf()
+    local now = os.time()
+    local ttl = Constants.CSRF_TTL or 120
+    if self.http.csrf_token and self.http.csrf_token ~= ""
+        and self.http.csrf_at and (now - self.http.csrf_at) < ttl then
+        return self.http.csrf_token
+    end
     local resp = self.http:get(self.base_url .. "/review/list", { follow = true, detect_auth = true })
     if resp.error then return nil, resp.error end
     local csrf = resp.body and resp.body:match(
         '<meta%s+[^>]-name=["\']csrf%-token["\']%s+[^>]-content=["\']([^"\']+)["\']')
     if not csrf then return nil, Constants.ERROR.INVALID_RESPONSE end
     self.http.csrf_token = csrf
+    self.http.csrf_at = now
     local user_id = resp.body:match("/user/show/(%d+)")
     if user_id then self.http.user_id = user_id end
-    Logging.diag("csrf: refreshed=", tostring(csrf ~= nil))
+    Logging.diag("csrf: refreshed")
     return csrf
 end
 

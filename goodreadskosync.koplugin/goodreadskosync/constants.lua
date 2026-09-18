@@ -8,10 +8,14 @@ the resolver and sync engine remain usable from unit tests without KOReader.
 --]]
 
 local Constants = {
-    VERSION = "1.11.4",
+    VERSION = "1.11.5",
 
     -- Storage schema version. Bump only alongside a migration function.
     SCHEMA_VERSION = 1,
+
+    -- How long a fetched CSRF token is reused (seconds). Goodreads rotates it;
+    -- refreshing within a sync run keeps writes fast without going stale.
+    CSRF_TTL = 120,
 
     -- Provider identifiers. The value is also the module basename under
     -- goodreadskosync.koplugin/providers/.

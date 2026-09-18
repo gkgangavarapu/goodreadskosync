@@ -504,6 +504,12 @@ end
 -- falling back to a blocking run when not in a coroutine.
 -- Returns completed, <task results>.
 function Goodreads:runInBackground(text, task)
+    -- Silent/background syncs (text == nil) must NOT be interruptible: the
+    -- Trapper variant shows a modal widget that dismisses on any tap, which
+    -- aborted the close/reconnect flush. Use a non-dismissable runner instead.
+    if text == nil then
+        return self:runInBackgroundNoTrap(task)
+    end
     local ok, Trapper = pcall(require, "ui/trapper")
     if ok and Trapper and type(Trapper.dismissableRunInSubprocess) == "function" then
         local completed, a, b, c = Trapper:dismissableRunInSubprocess(task, text)
@@ -515,6 +521,70 @@ function Goodreads:runInBackground(text, task)
         return true, nil
     end
     return true, a, b, c
+end
+
+-- Like Trapper:dismissableRunInSubprocess but without any trap widget, so it
+-- cannot be dismissed by a tap/key. Serializes the return values via
+-- string.buffer (the same mechanism Trapper uses).
+function Goodreads:runInBackgroundNoTrap(task)
+    local ok_ffi, ffiutil = pcall(require, "ffi/util")
+    local ok_buf, buffer = pcall(require, "string.buffer")
+    local _coroutine = coroutine.running()
+    if not (ok_ffi and ffiutil and ffiutil.runInSubProcess
+        and ok_buf and buffer and _coroutine) then
+        local ran, a, b, c = pcall(task)
+        if not ran then
+            Logging.warn("background task failed")
+            return true, nil
+        end
+        return true, a, b, c
+    end
+
+    local pid, parent_read_fd = ffiutil.runInSubProcess(function(_, child_write_fd)
+        -- selene: allow(incorrect_standard_library_use)
+        local results = table.pack(task())
+        local ok, str = pcall(buffer.encode, results)
+        ffiutil.writeToFD(child_write_fd, ok and str or "", true)
+    end, true)
+    if not pid then
+        local ran, a, b, c = pcall(task)
+        if not ran then return true, nil end
+        return true, a, b, c
+    end
+
+    local completed, ret_values = false, nil
+    local check_interval_sec = 0.125
+    while true do
+        local go_on_func = function() coroutine.resume(_coroutine, true) end
+        UIManager:scheduleIn(check_interval_sec, go_on_func)
+        coroutine.yield()
+        local subprocess_done = ffiutil.isSubProcessDone(pid)
+        local stuff_to_read = parent_read_fd
+            and ffiutil.getNonBlockingReadSize(parent_read_fd) ~= 0
+        if subprocess_done or stuff_to_read then
+            completed = true
+            if stuff_to_read then
+                local ret_str = ffiutil.readAllFromFD(parent_read_fd)
+                local ok, t = pcall(buffer.decode, ret_str)
+                if ok and t then ret_values = t end
+                if not subprocess_done then
+                    local collect_and_clean
+                    collect_and_clean = function()
+                        if ffiutil.isSubProcessDone(pid) then return end
+                        UIManager:scheduleIn(1, collect_and_clean)
+                    end
+                    UIManager:scheduleIn(1, collect_and_clean)
+                end
+            elseif parent_read_fd then
+                ffiutil.readAllFromFD(parent_read_fd)
+            end
+            break
+        end
+    end
+    if ret_values then
+        return completed, unpack(ret_values, 1, ret_values.n)
+    end
+    return completed
 end
 
 -- Run `fn` in a Trapper coroutine so runInBackground can actually fork a
@@ -846,7 +916,15 @@ function Goodreads:_syncPendingCore()
             local state = State.get(lk)
             local local_pct = tonumber(state.last_local_percent)
             local cloud_pct = tonumber(state.last_successful_percent) or 0
-            if local_pct and local_pct > 0 and local_pct ~= cloud_pct then
+            -- Respect sticky shelves: never push progress for a finished book
+            -- (unless configured) or a Did Not Finish book.
+            local shelf = state.shelf
+            local dnf = shelf == Constants.SHELF.DID_NOT_FINISH
+            local read_sticky = shelf == Constants.SHELF.READ
+                and not self:getSetting("update_progress_after_finished")
+                and local_pct and local_pct < 100
+            if local_pct and local_pct > 0 and local_pct ~= cloud_pct
+                and not dnf and not read_sticky then
                 local ok, err = provider:update_progress(gid, local_pct, "percent")
                 if ok then
                     state.last_successful_percent = local_pct
