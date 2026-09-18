@@ -6,7 +6,7 @@ Sync your KOReader reading progress with Goodreads.
 
 If Goodreads KO Sync is useful to you, consider supporting its development:
 
-**[Buy Me a Coffee](YOUR_BUY_ME_A_COFFEE_LINK)**
+**[Buy Me a Coffee](https://buymeacoffee.com/gkgangavarapu)**
 
 Your support helps with development, maintenance, bug fixes, and keeping the plugin working as Goodreads changes.
 
@@ -20,8 +20,9 @@ A Community KOReader plugin. Install it from **KOReader Storefront** or manually
 - **Shelf management** — Manage Currently Reading, Read, Want to Read, Did Not Finish, and custom shelves.
 - **Automatic book matching** — Find and link books to Goodreads automatically.
 - **Ratings** — Optionally sync star ratings.
-- **Manual controls** — Sync now, change status, rate books, and find books on Goodreads.
-- **Browse shelves** — View, search, add, and move books between Goodreads shelves.
+- **Manual controls** — Sync now (works with or without a book open), change status, rate books, and find books on Goodreads.
+- **Notes to Goodreads** — Save a note offline and it posts automatically when you reconnect.
+- **Diagnostic logging** — Optional, off by default, for troubleshooting.
 - **OTA updates** — Download and install plugin updates directly from KOReader.
 - **No telemetry** — No analytics or tracking.
 
@@ -33,7 +34,8 @@ Found a bug or have a feature request?
 
 If you enjoy using the plugin, the best way to support continued development is:
 
-**[Buy Me a Coffee](YOUR_BUY_ME_A_COFFEE_LINK)**
+**[Buy Me a Coffee](https://buymeacoffee.com/gkgangavarapu)**
+
 ## Installation
 
 ### KOReader Storefront
