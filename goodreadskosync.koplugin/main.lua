@@ -17,6 +17,7 @@ local IdentifyUI = require("goodreadskosync.ui.identify")
 local InfoMessage = require("ui/widget/infomessage")
 local LibraryUI = require("goodreadskosync.ui.library")
 local Logging = require("goodreadskosync.logging")
+local diag = Logging.diag
 local Tasks = require("goodreadskosync.tasks")
 local Mappings = require("goodreadskosync.mappings")
 local Metadata = require("goodreadskosync.metadata")
@@ -25,14 +26,12 @@ local PageMapper = require("goodreadskosync.sync.pagemapper")
 local Queue = require("goodreadskosync.sync.queue")
 local Resolver = require("goodreadskosync.resolver.resolver")
 local SearchUI = require("goodreadskosync.ui.search")
-local SettingsUI = require("goodreadskosync.ui.settings")
+local State = require("goodreadskosync.sync.state")
 local Shelves = require("goodreadskosync.sync.shelves")
 local ShelfCache = require("goodreadskosync.sync.shelf_cache")
 local Presets = require("goodreadskosync.sync.presets")
-local State = require("goodreadskosync.sync.state")
 local StatusUI = require("goodreadskosync.ui.status")
 local Storage = require("goodreadskosync.storage")
-local SupportUI = require("goodreadskosync.ui.support")
 local Update = require("goodreadskosync.update")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -568,7 +567,7 @@ function Goodreads:_syncCore(inputs)
         return { ok = true, skipped = true }
     end
 
-    Logging.diag("_syncCore: gid=", tostring(inputs.gid), " pct=", tostring(inputs.percent),
+    diag("_syncCore: gid=", tostring(inputs.gid), " pct=", tostring(inputs.percent),
         " unit=", tostring(inputs.sync_unit), " force=", tostring(inputs.force_remote),
         " status=", tostring(inputs.status))
 
@@ -591,7 +590,7 @@ function Goodreads:_syncCore(inputs)
         end
     end
 
-    Logging.diag("_syncCore: remote_shelf=", tostring(remote_shelf),
+    diag("_syncCore: remote_shelf=", tostring(remote_shelf),
         " state.shelf=", tostring(state.shelf),
         " override=", tostring(state.override_shelf))
 
@@ -723,7 +722,7 @@ function Goodreads:_syncCore(inputs)
     end
 
     for _, result in ipairs(results) do
-        Logging.diag("_syncCore: result type=", tostring(result.action and result.action.type),
+        diag("_syncCore: result type=", tostring(result.action and result.action.type),
             " ok=", tostring(result.ok), " error=", tostring(result.error))
     end
     State.set(inputs.local_key, new_state)
@@ -762,7 +761,7 @@ function Goodreads:_syncCore(inputs)
 end
 
 function Goodreads:_syncNow()
-    Logging.diag("event: syncNow")
+    diag("event: syncNow")
     if self._sync_busy then
         -- A background sync is already running; fold this into a follow-up.
         self._sync_queued = true
@@ -862,13 +861,13 @@ function Goodreads:_syncPendingCore()
                             value = local_pct, unit = "percent" },
                     })
                     failed = failed + 1
-                    Logging.diag("syncPending: failed book=", tostring(gid),
+                    diag("syncPending: failed book=", tostring(gid),
                         " error=", tostring(err))
                 end
             end
         end
     end
-    Logging.diag("syncPending: sent=", tostring(sent), " failed=", tostring(failed))
+    diag("syncPending: sent=", tostring(sent), " failed=", tostring(failed))
     return { ok = true, changed = changed, sent = sent, failed = failed }
 end
 
@@ -946,33 +945,33 @@ end
 -- Automatic sync (on open, periodic, resume) with light feedback.
 function Goodreads:syncSilently(opts)
     opts = opts or {}
-    Logging.diag("syncSilently: force=", tostring(opts.force_remote),
+    diag("syncSilently: force=", tostring(opts.force_remote),
         " doc=", tostring(self:hasDocument()), " online=", tostring(self:isOnline()))
     if not self:hasDocument() then
-        Logging.diag("syncSilently: no document -> skip")
+        diag("syncSilently: no document -> skip")
         return
     end
     local mapping = self:currentMapping()
     if not mapping or not mapping.goodreads_id then
-        Logging.diag("syncSilently: no mapping -> skip")
+        diag("syncSilently: no mapping -> skip")
         return
     end
     -- Automatic syncs never turn Wi-Fi on: they run when already online and
     -- otherwise defer to the offline queue (flushed on reconnect/close).
     if not self:isOnline() then
-        Logging.diag("syncSilently: offline -> defer")
+        diag("syncSilently: offline -> defer")
         return
     end
     -- One sync at a time: overlapping triggers otherwise push the same progress
     -- more than once. Coalesce them into a single follow-up run.
     if self._sync_busy then
-        Logging.diag("syncSilently: busy -> coalesced")
+        diag("syncSilently: busy -> coalesced")
         self._sync_queued = true
         return
     end
     local inputs = self:syncInputs(opts)
     if not inputs then
-        Logging.diag("syncSilently: no inputs -> skip")
+        diag("syncSilently: no inputs -> skip")
         return
     end
     self._sync_busy = true
@@ -982,11 +981,11 @@ function Goodreads:syncSilently(opts)
         end)
         self._sync_busy = false
         if completed == false or not summary then
-            Logging.diag("syncSilently: completed=", tostring(completed), " -> abort")
+            diag("syncSilently: completed=", tostring(completed), " -> abort")
             self._sync_queued = false
             return
         end
-        Logging.diag("syncSilently: ok=", tostring(summary.ok),
+        diag("syncSilently: ok=", tostring(summary.ok),
             " changed=", tostring(summary.changed),
             " pct=", tostring(summary.percent),
             " error=", tostring(summary.error))
@@ -1055,12 +1054,12 @@ function Goodreads:processQueueCore()
     local sent, failed, permanent = 0, 0, 0
     local ids, seen = {}, {}
     local due = Queue.due()
-    Logging.diag("processQueue: due=", tostring(#due))
+    diag("processQueue: due=", tostring(#due))
     for _, op in ipairs(due) do
         local ok, err
         local drop = false
         local percent
-        Logging.diag("processQueue: op=", tostring(op.operation), " book=",
+        diag("processQueue: op=", tostring(op.operation), " book=",
             tostring(op.book_id), " pct=", tostring(op.payload and op.payload.percent),
             " key=", tostring(op.local_key))
         if op.operation == "shelf" then
@@ -1082,10 +1081,10 @@ function Goodreads:processQueueCore()
                 op.payload.value or op.payload.percent, op.payload.unit, op.payload.note)
         end
         if drop then
-            Logging.diag("processQueue: drop stale progress book=", tostring(op.book_id))
+            diag("processQueue: drop stale progress book=", tostring(op.book_id))
             Queue.remove(op.id)
         elseif ok then
-            Logging.diag("processQueue: sent op=", tostring(op.operation),
+            diag("processQueue: sent op=", tostring(op.operation),
                 " book=", tostring(op.book_id))
             Queue.remove(op.id)
             if op.operation == "progress" and op.local_key then
@@ -1103,11 +1102,11 @@ function Goodreads:processQueueCore()
                 ids[#ids + 1] = op.book_id
             end
         elseif err == Constants.ERROR.AUTH_REQUIRED then
-            Logging.diag("processQueue: auth required -> stop")
+            diag("processQueue: auth required -> stop")
             -- Stop retrying until the user logs in again; leave it queued.
             break
         else
-            Logging.diag("processQueue: failed op=", tostring(op.operation),
+            diag("processQueue: failed op=", tostring(op.operation),
                 " book=", tostring(op.book_id), " error=", tostring(err))
             if err == Constants.ERROR.NOT_FOUND then
                 -- The client already re-asserted the shelf and retried; a
@@ -1121,7 +1120,7 @@ function Goodreads:processQueueCore()
             end
         end
     end
-    Logging.diag("processQueue: done sent=", tostring(sent), " failed=",
+    diag("processQueue: done sent=", tostring(sent), " failed=",
         tostring(failed), " permanent=", tostring(permanent))
     return { sent = sent, failed = failed, permanent = permanent, ids = ids }
 end
@@ -1676,7 +1675,7 @@ end
 --------------------------------------------------------------------------------
 
 function Goodreads:onReaderReady()
-    Logging.diag("event: onReaderReady")
+    diag("event: onReaderReady")
     if self.page_mapper then self.page_mapper:cachePageMap() end
     self:registerHighlight()
     self:maybeCheckForUpdates()
@@ -1749,95 +1748,9 @@ function Goodreads:_onProgressChanged(local_key)
     if should then self:syncSilently() end
 end
 
--- "Add note to Goodreads" entry in the highlight dialog.
-function Goodreads:registerHighlight()
-    if not self.ui or not self.ui.highlight
-        or type(self.ui.highlight.addToHighlightDialog) ~= "function" then
-        return
-    end
-    self.ui.highlight:removeFromHighlightDialog("goodreads_note")
-    self.ui.highlight:addToHighlightDialog("goodreads_note", function(this)
-        return {
-            text = _("Add note to Goodreads"),
-            enabled_func = function()
-                return self:hasDocument() and self:currentMapping() ~= nil
-            end,
-            callback = function()
-                local selected = this.selected_text
-                self:promptNote(selected and selected.text or "")
-                this:onClose()
-            end,
-        }
-    end)
-end
-
-function Goodreads:unregisterHighlight()
-    if self.ui and self.ui.highlight
-        and type(self.ui.highlight.removeFromHighlightDialog) == "function" then
-        self.ui.highlight:removeFromHighlightDialog("goodreads_note")
-    end
-end
-
-function Goodreads:promptNote(text)
-    local InputDialog = require("ui/widget/inputdialog")
-    local dialog
-    dialog = InputDialog:new{
-        title = _("Add a note to Goodreads"),
-        input = text or "",
-        buttons = { {
-            { text = _("Cancel"), callback = function() UIManager:close(dialog) end },
-            {
-                text = _("Post"),
-                callback = function()
-                    local note = dialog:getInputText()
-                    UIManager:close(dialog)
-                    self:postNote(note)
-                end,
-            },
-        } },
-    }
-    UIManager:show(dialog)
-    dialog:onShowKeyboard()
-end
-
-function Goodreads:postNote(note)
-    if not note or note == "" then return end
-    local mapping, identity = self:currentMapping()
-    if not mapping or not mapping.goodreads_id then return end
-    local local_key = identity and identity.local_key
-    local percent = self:currentPercent() or 0
-    local payload = {
-        type = "note", note = note, percent = percent,
-        value = percent, unit = "percent",
-    }
-    -- Offline: save it; the queue posts it once we're back online.
-    if not self:isOnline() then
-        Queue.enqueue({
-            operation = "note",
-            book_id = mapping.goodreads_id,
-            local_key = local_key,
-            payload = payload,
-        })
-        Widgets.notify(_("Note saved · will post when online"))
-        return
-    end
-    local provider = self:getProvider()
-    self:runAsync(function()
-        local completed, ok = self:runInBackground(_("Posting note…"), function()
-            local res = provider:update_progress(mapping.goodreads_id, percent, "percent", note)
-            if not res then
-                Queue.enqueue({
-                    operation = "note",
-                    book_id = mapping.goodreads_id,
-                    local_key = local_key,
-                    payload = payload,
-                })
-            end
-            return res
-        end)
-        if completed == false then return end
-        Widgets.notify(ok and _("Note posted") or _("Note saved · will post when online"))
-    end)
+-- Notes feature (highlight integration + note posting) lives in ui/notes.lua.
+for name, fn in pairs(require("goodreadskosync.ui.notes")) do
+    Goodreads[name] = fn
 end
 
 -- Turn a GitHub release body into short plain text for the update prompt.
@@ -1946,10 +1859,10 @@ function Goodreads:progressPayload(local_key)
 end
 
 function Goodreads:onCloseDocument()
-    Logging.diag("event: onCloseDocument")
+    diag("event: onCloseDocument")
     -- Capture progress before the document is torn down, then queue a final sync.
     if not self:getSetting("sync_on_close") then
-        Logging.diag("onCloseDocument: sync_on_close off -> skip")
+        diag("onCloseDocument: sync_on_close off -> skip")
         return
     end
     if not self:hasDocument() then return end
@@ -1958,7 +1871,7 @@ function Goodreads:onCloseDocument()
     local payload = self:progressPayload(identity.local_key)
     if not payload then return end
     if Progress.shouldSync(State.get(identity.local_key), payload.percent) then
-        Logging.diag("onCloseDocument: queue progress pct=", tostring(payload.percent),
+        diag("onCloseDocument: queue progress pct=", tostring(payload.percent),
             " key=", tostring(identity.local_key))
         Queue.enqueue({
             operation = "progress",
@@ -1987,18 +1900,18 @@ function Goodreads:onCloseDocument()
 
     -- Flush the queue now so the final progress isn't delayed until the next
     -- timer tick or resume.
-    Logging.diag("onCloseDocument: flush queue")
+    diag("onCloseDocument: flush queue")
     self:processQueue()
 end
 
 function Goodreads:onSuspend()
-    Logging.diag("event: onSuspend")
+    diag("event: onSuspend")
     if self:hasDocument() then
         local mapping, identity = self:currentMapping()
         if mapping and mapping.goodreads_id then
             local payload = self:progressPayload(identity.local_key)
             if payload and Progress.shouldSync(State.get(identity.local_key), payload.percent) then
-                Logging.diag("onSuspend: queue progress pct=", tostring(payload.percent))
+                diag("onSuspend: queue progress pct=", tostring(payload.percent))
                 Queue.enqueue({
                     operation = "progress",
                     book_id = mapping.goodreads_id,
@@ -2011,7 +1924,7 @@ function Goodreads:onSuspend()
 end
 
 function Goodreads:onResume()
-    Logging.diag("event: onResume")
+    diag("event: onResume")
     self:maybeIdentifyOnReconnect()
     -- One flush path only: an engine run also flushes the queue, so a separate
     -- processQueue() here would send the same pending progress twice.
@@ -2027,7 +1940,7 @@ end
 -- Flush the queue, link if needed, and push the open book's progress as soon
 -- as connectivity returns, so nothing read offline waits for a checkpoint.
 function Goodreads:onNetworkConnected()
-    Logging.diag("event: onNetworkConnected")
+    diag("event: onNetworkConnected")
     self:maybeIdentifyOnReconnect()
     local mapping = self:currentMapping()
     if self:hasDocument() and mapping and mapping.goodreads_id and self:isOnline() then
@@ -2304,159 +2217,9 @@ end
 
 -- Account submenu, rebuilt each time it is opened so it reflects the current
 -- sign-in state (Log in when signed out, Log out when signed in).
-function Goodreads:accountMenuItems()
-    local items = {}
-    if Auth.is_authenticated() then
-        items[#items + 1] = {
-            text = _("Log out"),
-            callback = function()
-                Widgets.confirm(_("Sign out of Goodreads?"),
-                    function() self:logout() end, _("Sign out"))
-            end,
-        }
-    else
-        items[#items + 1] = {
-            text = _("Log in"),
-            callback = function() self:login() end,
-        }
-    end
-    items[#items + 1] = {
-        text = _("Account status"),
-        callback = function() self:showAccount() end,
-    }
-    items[#items + 1] = {
-        text = _("Test connection"),
-        callback = function() self:testConnection() end,
-    }
-    items[#items + 1] = {
-        text = _("Forget saved password"),
-        callback = function() self:forgetCredentials() end,
-    }
-    return items
-end
-
--- Shelf chooser for the current book. The checked state is read fresh so the
--- radio updates as soon as the user picks one.
-function Goodreads:setStatusMenuItems()
-    local local_key = self:currentIdentity().local_key
-    local options = {
-        { Constants.SHELF.WANT_TO_READ, _("Want to Read") },
-        { Constants.SHELF.CURRENTLY_READING, _("Currently Reading") },
-        { Constants.SHELF.READ, _("Read") },
-        { Constants.SHELF.DID_NOT_FINISH, _("Did Not Finish") },
-    }
-    local items = {}
-    for i = 1, #options do
-        local shelf = options[i][1]
-        items[#items + 1] = {
-            text = options[i][2],
-            radio = true,
-            checked_func = function() return State.get(local_key).shelf == shelf end,
-            callback = function() self:setShelf(shelf) end,
-        }
-    end
-    return items
-end
-
-function Goodreads:buildMenu()
-    return {
-        {
-            text = _("Sync now"),
-            callback = function() self:syncNow() end,
-        },
-        {
-            text = _("Set status on Goodreads"),
-            enabled_func = function() return self:hasDocument() end,
-            sub_item_table_func = function() return self:setStatusMenuItems() end,
-        },
-        {
-            text = _("Support this project"),
-            callback = function() SupportUI.show() end,
-        },
-        {
-            text = _("Account"),
-            sub_item_table_func = function() return self:accountMenuItems() end,
-        },
-        {
-            text = _("This book"),
-            sub_item_table = {
-                {
-                    text = _("Find on Goodreads"),
-                    enabled_func = function() return self:hasDocument() end,
-                    callback = function() self:identifyCurrent({ no_cache = true }) end,
-                },
-                {
-                    text = _("Change linked book"),
-                    enabled_func = function() return self:hasDocument() end,
-                    callback = function()
-                        self:identifyCurrent({ ignore_mapping = true, no_cache = true, choose = true })
-                    end,
-                },
-                {
-                    text = _("Rate this book"),
-                    enabled_func = function() return self:hasDocument() end,
-                    callback = function() self:rateCurrentBook() end,
-                },
-                {
-                    text = _("Forget link"),
-                    enabled_func = function() return self:hasDocument() end,
-                    callback = function()
-                        Widgets.confirm(_("Forget the Goodreads link for this book?"),
-                            function() self:forgetMapping() end, _("Forget"))
-                    end,
-                },
-                {
-                    text = _("Sync this book automatically"),
-                    enabled_func = function() return self:hasDocument() end,
-                    checked_func = function()
-                        local identity = self:currentIdentity()
-                        return self:isBookSyncEnabled(identity.local_key)
-                    end,
-                    callback = function()
-                        local identity = self:currentIdentity()
-                        self:setBookSetting(identity.local_key, "sync",
-                            not self:isBookSyncEnabled(identity.local_key))
-                    end,
-                },
-                {
-                    text = _("Book status"),
-                    enabled_func = function() return self:hasDocument() end,
-                    callback = function() self:showStatus() end,
-                },
-            },
-        },
-        {
-            text = _("Settings"),
-            sub_item_table_func = function() return SettingsUI.build(self) end,
-        },
-        {
-            text = _("More"),
-            sub_item_table = {
-                { text = _("Sync status"), callback = function() self:showDiagnostics() end },
-                { text = _("Waiting to sync"), callback = function() self:showQueue() end },
-                { text = _("Check for updates"), callback = function() self:checkForUpdates(true) end },
-                {
-                    text_func = function()
-                        return string.format(_("Version: %s"), Constants.VERSION)
-                    end,
-                    callback = function()
-                        UIManager:show(InfoMessage:new{
-                            text = string.format(_("Goodreads KO Sync v%s\n%s"),
-                                Constants.VERSION, Update.PAGE_URL),
-                            timeout = 10,
-                        })
-                    end,
-                },
-                {
-                    text = _("Clear failed syncs"),
-                    callback = function()
-                        Queue.clearFailed()
-                        Widgets.message(_("Failed syncs cleared."))
-                    end,
-                },
-            },
-        },
-    }
+-- Menu construction lives in ui/menu.lua.
+for name, fn in pairs(require("goodreadskosync.ui.menu")) do
+    Goodreads[name] = fn
 end
 
 -- Exposed for tests/diagnostics without instantiating KOReader.
