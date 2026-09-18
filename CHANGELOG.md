@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-09-18
+
+### Changed
+
+- Internal refactor for maintainability: a single reusable **Goodreads API**
+  module, a dedicated **sync controller**, and shared **tasks / menu / notes**
+  modules. No behaviour change.
+
 ## [1.11.5] - 2026-09-18
 
 ### Fixed
