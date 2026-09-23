@@ -12,12 +12,15 @@ local Widgets = require("goodreadskosync.ui.widgets")
 local Identify = {}
 
 -- Show the candidate list for a resolution result.
-function Identify.showCandidates(identity, candidates, on_select)
+function Identify.showCandidates(identity, candidates, on_select, on_manual_search)
     local title = _("Goodreads KO Sync\nWhich book is this?")
     if identity and identity.title then
         title = string.format(_("Goodreads KO Sync\n%s"), identity.title)
     end
-    Widgets.candidateDialog(candidates, on_select, { title = title })
+    Widgets.candidateDialog(candidates, on_select, {
+        title = title,
+        on_manual_search = on_manual_search,
+    })
 end
 
 -- Show the unidentified-book screen.

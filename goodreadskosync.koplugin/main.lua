@@ -354,7 +354,7 @@ function Goodreads:_handleResolution(result, identity, metadata, filename, choos
         if has_candidates then
             IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
                 self:confirmMapping(result, candidate)
-            end)
+            end, function() self:promptChangeLinkedBook() end)
         else
             self:showUnidentified(identity, metadata, filename)
         end
@@ -372,7 +372,7 @@ function Goodreads:_handleResolution(result, identity, metadata, filename, choos
         else
             IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
                 self:confirmMapping(result, candidate)
-            end)
+            end, function() self:promptChangeLinkedBook() end)
         end
     elseif result.status == "error" then
         Widgets.notify(_("No network · will retry"))
@@ -460,7 +460,7 @@ function Goodreads:_searchManual(metadata, filename, query)
     if result.candidates and #result.candidates > 0 then
         IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
             self:confirmMapping(result, candidate)
-        end)
+        end, function() self:promptChangeLinkedBook() end)
     else
         Widgets.message(_("No matches found."))
     end

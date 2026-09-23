@@ -6,19 +6,10 @@ Shared UI widgets.
 
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
-local Font = require("ui/font")
 local InfoMessage = require("ui/widget/infomessage")
 local Size = require("ui/size")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
-
--- Toasts are rendered ~40% larger than the default notification font.
-local BASE_TOAST_FACE = Font:getFace("x_smallinfofont")
-local TOAST_FACE = BASE_TOAST_FACE
-if BASE_TOAST_FACE and BASE_TOAST_FACE.size then
-    TOAST_FACE = Font:getFace("x_smallinfofont",
-        math.floor(BASE_TOAST_FACE.size * 1.4 + 0.5))
-end
 
 local Widgets = {}
 
@@ -56,7 +47,6 @@ function Widgets.notify(text, timeout)
         UIManager:show(Notification:new{
             text = branded,
             timeout = timeout or 3,
-            face = TOAST_FACE,
             -- Keep toasts small and unobtrusive.
             margin = Size.margin.small,
             padding = Size.padding.small,
@@ -102,6 +92,15 @@ function Widgets.candidateDialog(candidates, on_select, opts)
             callback = function()
                 UIManager:close(dialog)
                 on_select(candidate)
+            end,
+        } }
+    end
+    if opts.on_manual_search then
+        buttons[#buttons + 1] = { {
+            text = _("Search by title / author / ISBN…"),
+            callback = function()
+                UIManager:close(dialog)
+                opts.on_manual_search()
             end,
         } }
     end
