@@ -104,9 +104,7 @@ function Menu:buildMenu()
                 {
                     text = _("Change linked book"),
                     enabled_func = function() return self:hasDocument() end,
-                    callback = function()
-                        self:identifyCurrent({ ignore_mapping = true, no_cache = true, choose = true })
-                    end,
+                    callback = function() self:promptChangeLinkedBook() end,
                 },
                 {
                     text = _("Rate this book"),

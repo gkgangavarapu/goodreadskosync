@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Toasts show only the first two words of the book title and are ~40% larger.
+- **Link books automatically** is now off by default.
+- **Change linked book** now prompts for a title, author, ISBN, or Goodreads ID.
+
 ## [1.12.0] - 2026-09-18
 
 ### Changed

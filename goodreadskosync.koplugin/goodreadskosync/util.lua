@@ -502,17 +502,18 @@ function Util.countKeys(t)
     return n
 end
 
--- Short book label for toasts (kept brief; never splits a UTF-8 character).
+-- Short book label for toasts: only the first two words, then an ellipsis.
 function Util.shortTitle(title)
     if type(title) ~= "string" or title == "" then return nil end
-    if #title <= 28 then return title end
-    local cut = 28
-    while cut > 1 do
-        local b = title:byte(cut + 1)
-        if not b or b < 0x80 or b >= 0xC0 then break end
-        cut = cut - 1
+    local words, count = {}, 0
+    for w in title:gmatch("%S+") do
+        count = count + 1
+        if count <= 2 then words[#words + 1] = w end
     end
-    return title:sub(1, cut) .. "…"
+    if count == 0 then return nil end
+    local out = table.concat(words, " ")
+    if count > 2 then out = out .. "…" end
+    return out
 end
 
 return Util

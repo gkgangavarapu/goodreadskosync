@@ -50,7 +50,7 @@ local DEFAULT_SETTINGS = {
     track_percent_step = 5,
     mark_started_immediately = true,
     remember_password = false,
-    auto_link = true,
+    auto_link = false,
     update_progress_after_finished = false,
     auto_update_check = true,
     conflict_policy = Constants.CONFLICT_POLICY.PREFER_LOCAL,
@@ -270,6 +270,42 @@ function Goodreads:identifyCurrent(opts)
         return self:_identifyCurrent(opts)
     end
     return self:runWhenOnline(function() return self:_identifyCurrent(opts) end)
+end
+
+-- "Change linked book": let the user type a title/author/ISBN/Goodreads ID and
+-- search, then pick the right match.
+function Goodreads:promptChangeLinkedBook()
+    if not self:hasDocument() then
+        Widgets.message(_("Open a book first."))
+        return
+    end
+    local InputDialog = require("ui/widget/inputdialog")
+    local dialog
+    dialog = InputDialog:new{
+        title = _("Change linked book"),
+        description = _("Enter a title, author, ISBN, or Goodreads ID."),
+        input = "",
+        buttons = { {
+            { text = _("Cancel"), callback = function() UIManager:close(dialog) end },
+            {
+                text = _("Search"),
+                callback = function()
+                    local query = dialog:getInputText()
+                    UIManager:close(dialog)
+                    if query and query ~= "" then
+                        self:identifyCurrent({
+                            ignore_mapping = true,
+                            no_cache = true,
+                            choose = true,
+                            query = query,
+                        })
+                    end
+                end,
+            },
+        } },
+    }
+    UIManager:show(dialog)
+    dialog:onShowKeyboard()
 end
 
 function Goodreads:_identifyCurrent(opts)
