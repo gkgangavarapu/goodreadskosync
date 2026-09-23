@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.5] - 2026-09-23
+
+Reverted the recent toast styling experiments so notifications render exactly like before. The fix that stopped a sync notification from failing to appear is kept, and toasts still show the book name in two words with what changed.
+
 ## [1.13.4] - 2026-09-23
 
 Fixed the sync notification that could fail to appear after an update (a small bug could stop the “what synced” toast from showing). Your progress was still being saved correctly.
