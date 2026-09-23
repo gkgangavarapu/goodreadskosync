@@ -413,7 +413,7 @@ function Controller:_syncToast(summary)
     end
     if summary.percent
         and not (summary.pushed_shelf == Constants.SHELF.READ and summary.percent >= 100) then
-        parts[#parts + 1] = string.format("%d%%", summary.percent)
+        parts[#parts + 1] = string.format(_("Progress %d%%"), summary.percent)
     end
     if #parts == 0 then parts[#parts + 1] = _("Synced") end
     local title = shortTitle(summary.title)
@@ -567,6 +567,7 @@ function Controller:processQueueCore()
     if not provider then return { sent = 0, failed = 0, permanent = 0, ids = {} } end
     local sent, failed, permanent = 0, 0, 0
     local ids, seen = {}, {}
+    local sent_info = {}
     local due = Queue.due()
     diag("processQueue: due=", tostring(#due))
     for _, op in ipairs(due) do
@@ -610,6 +611,11 @@ function Controller:processQueueCore()
                 })
             end
             sent = sent + 1
+            sent_info[#sent_info + 1] = {
+                book_id = op.book_id,
+                operation = op.operation,
+                percent = percent,
+            }
             local key = tostring(op.book_id)
             if not seen[key] then
                 seen[key] = true
@@ -636,23 +642,41 @@ function Controller:processQueueCore()
     end
     diag("processQueue: done sent=", tostring(sent), " failed=",
         tostring(failed), " permanent=", tostring(permanent))
-    return { sent = sent, failed = failed, permanent = permanent, ids = ids }
+    return { sent = sent, failed = failed, permanent = permanent, ids = ids,
+        sent_info = sent_info }
 end
 
--- Short, specific toast naming the books whose offline changes were sent.
-function Controller:_flushToast(ids)
-    local names = {}
-    for _, id in ipairs(ids or {}) do
-        local t = shortTitle(self:_titleForBookId(id))
-        if t then names[#names + 1] = t end
-    end
-    if #names == 0 then
+-- Short, specific toast naming the books whose offline changes were sent and
+-- what changed (progress %, shelf, rating, note).
+function Controller:_flushToast(sent)
+    if not sent or #sent == 0 then
         return _("Synced to Goodreads")
     end
+    local labels, seen = {}, {}
+    for _, item in ipairs(sent) do
+        local id = tostring(item.book_id)
+        if not seen[id] then
+            seen[id] = true
+            local action
+            if item.operation == "progress" and item.percent then
+                action = string.format(_("Progress %d%%"), item.percent)
+            elseif item.operation == "shelf" then
+                action = _("Shelf updated")
+            elseif item.operation == "rating" then
+                action = _("Rating updated")
+            elseif item.operation == "note" then
+                action = _("Note posted")
+            else
+                action = _("Synced")
+            end
+            local t = shortTitle(self:_titleForBookId(item.book_id))
+            labels[#labels + 1] = t and string.format("%s · %s", t, action) or action
+        end
+    end
     local shown = {}
-    for i = 1, math.min(#names, 2) do shown[#shown + 1] = names[i] end
+    for i = 1, math.min(#labels, 2) do shown[#shown + 1] = labels[i] end
     local label = table.concat(shown, ", ")
-    local more = #names - #shown
+    local more = #labels - #shown
     if more > 0 then
         label = string.format(_("%s +%d more"), label, more)
     end
@@ -680,7 +704,7 @@ function Controller:processQueue()
         end)
         if completed == false or type(res) ~= "table" then return end
         if res.sent and res.sent > 0 then
-            Widgets.notify(self:_flushToast(res.ids), 2)
+            Widgets.notify(self:_flushToast(res.sent_info), 2)
         end
         if res.permanent and res.permanent > 0 then
             self:_notifyQueuedFailure(res.permanent)

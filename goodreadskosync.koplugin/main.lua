@@ -408,8 +408,10 @@ function Goodreads:linkCandidate(result, candidate)
     if candidate.pages then
         self:setBookSetting(result.local_key, "pages", candidate.pages)
     end
-    Widgets.notify(string.format(_("Linked to Goodreads: %s"),
-        candidate.title or _("this book")))
+    local linked_title = shortTitle(candidate.title)
+    Widgets.notify(linked_title
+        and string.format(_("%s · Linked"), linked_title)
+        or _("Linked to Goodreads"))
     -- Newly linked book: sync at once so it appears on Goodreads right away.
     -- When enabled, also start it as Currently Reading for an immediate effect.
     self:syncSilently({
@@ -522,8 +524,16 @@ function Goodreads:submitRating(stars)
             return provider:set_rating(mapping.goodreads_id, stars)
         end)
         if completed == false then return end
-        Widgets.notify(ok and string.format(_("Rated %d stars"), stars)
-            or _("Rating failed"))
+        local t = shortTitle(mapping.title)
+        if ok then
+            Widgets.notify(t
+                and string.format(_("%s · Rated %d stars"), t, stars)
+                or string.format(_("Rated %d stars"), stars))
+        else
+            Widgets.notify(t
+                and string.format(_("%s · Rating failed"), t)
+                or _("Rating failed"))
+        end
     end)
 end
 
@@ -1232,7 +1242,7 @@ function Goodreads:onCloseDocument()
     if not self:isOnline() then
         local t = shortTitle(mapping.title or identity.title)
         if t then
-            Widgets.notify(string.format(_("%s · %d%% saved offline"), t, payload.percent), 3)
+            Widgets.notify(string.format(_("%s · Progress %d%% saved offline"), t, payload.percent), 3)
         else
             Widgets.notify(_("Saved offline · will sync when connected"), 3)
         end

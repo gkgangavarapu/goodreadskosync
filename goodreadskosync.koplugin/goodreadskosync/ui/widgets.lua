@@ -35,7 +35,7 @@ end
 -- Keep toast text at the normal size, but allow it to wrap onto more than one
 -- line (and give the bubble a little more padding) so it reads as a bigger
 -- toast without enlarging the text.
-local TOAST_WRAP = 26
+local TOAST_WRAP = 16
 local function wrap_toast(text)
     if type(text) ~= "string" or #text <= TOAST_WRAP then return text end
     local cut
@@ -61,9 +61,9 @@ function Widgets.notify(text, timeout)
         UIManager:show(Notification:new{
             text = wrap_toast(branded),
             timeout = timeout or 3,
-            -- A little more breathing room (text size stays the same).
+            -- Bigger bubble, same text size.
             margin = Size.margin.default,
-            padding = Size.padding.default,
+            padding = Size.padding.large,
         })
     else
         UIManager:show(InfoMessage:new{

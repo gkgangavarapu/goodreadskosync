@@ -9,6 +9,7 @@ instance (they call other plugin methods like `self:currentMapping()`).
 
 local Queue = require("goodreadskosync.sync.queue")
 local UIManager = require("ui/uimanager")
+local Util = require("goodreadskosync.util")
 local Widgets = require("goodreadskosync.ui.widgets")
 local _ = require("gettext")
 
@@ -71,6 +72,7 @@ function Notes:postNote(note)
     if not mapping or not mapping.goodreads_id then return end
     local local_key = identity and identity.local_key
     local percent = self:currentPercent() or 0
+    local t = Util.shortTitle(mapping.title or (identity and identity.title))
     local payload = {
         type = "note", note = note, percent = percent,
         value = percent, unit = "percent",
@@ -83,7 +85,8 @@ function Notes:postNote(note)
             local_key = local_key,
             payload = payload,
         })
-        Widgets.notify(_("Note saved · will post when online"))
+        Widgets.notify(t and string.format(_("%s · Note saved · will post when online"), t)
+            or _("Note saved · will post when online"))
         return
     end
     local provider = self:getProvider()
@@ -101,7 +104,12 @@ function Notes:postNote(note)
             return res
         end)
         if completed == false then return end
-        Widgets.notify(ok and _("Note posted") or _("Note saved · will post when online"))
+        if ok then
+            Widgets.notify(t and string.format(_("%s · Note posted"), t) or _("Note posted"))
+        else
+            Widgets.notify(t and string.format(_("%s · Note saved · will post when online"), t)
+                or _("Note saved · will post when online"))
+        end
     end)
 end
 
