@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.4] - 2026-09-23
+
+Fixed the sync notification that could fail to appear after an update (a small bug could stop the “what synced” toast from showing). Your progress was still being saved correctly.
+
 ## [1.13.3] - 2026-09-23
 
 Toasts are a bit bigger (same text size) and always say what happened, with the book name in two words — for example “No Longer… · Progress 40%”, “No Longer… · Linked”, “No Longer… · Note posted”, or “No Longer… · Rated 5 stars”.

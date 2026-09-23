@@ -653,7 +653,10 @@ function Controller:_flushToast(sent)
         return _("Synced to Goodreads")
     end
     local labels, seen = {}, {}
-    for _, item in ipairs(sent) do
+    -- NOTE: index loop, not `for _, item`: the loop variable `_` would shadow
+    -- the module-level gettext `_` used below.
+    for i = 1, #sent do
+        local item = sent[i]
         local id = tostring(item.book_id)
         if not seen[id] then
             seen[id] = true
