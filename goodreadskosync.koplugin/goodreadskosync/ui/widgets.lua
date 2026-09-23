@@ -32,6 +32,20 @@ end
 -- Small, non-intrusive toast (falls back to an InfoMessage if unavailable).
 -- Repeats of the same message within a couple of seconds are coalesced so
 -- multiple events don't stack toasts.
+-- Keep toast text at the normal size, but allow it to wrap onto more than one
+-- line (and give the bubble a little more padding) so it reads as a bigger
+-- toast without enlarging the text.
+local TOAST_WRAP = 26
+local function wrap_toast(text)
+    if type(text) ~= "string" or #text <= TOAST_WRAP then return text end
+    local cut
+    for i = TOAST_WRAP, 1, -1 do
+        if text:sub(i, i) == " " then cut = i break end
+    end
+    if not cut then return text end
+    return text:sub(1, cut - 1) .. "\n" .. text:sub(cut + 1)
+end
+
 local last_notify_text, last_notify_at
 function Widgets.notify(text, timeout)
     -- Toasts stay quiet and unbranded: just the book/action detail.
@@ -45,11 +59,11 @@ function Widgets.notify(text, timeout)
     local ok, Notification = pcall(require, "ui/widget/notification")
     if ok and Notification then
         UIManager:show(Notification:new{
-            text = branded,
+            text = wrap_toast(branded),
             timeout = timeout or 3,
-            -- Keep toasts small and unobtrusive.
-            margin = Size.margin.small,
-            padding = Size.padding.small,
+            -- A little more breathing room (text size stays the same).
+            margin = Size.margin.default,
+            padding = Size.padding.default,
         })
     else
         UIManager:show(InfoMessage:new{

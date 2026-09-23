@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-09-23
+
+Toasts keep the normal text size but now wrap onto two lines with a little more padding, so they read as a bigger, easier-to-read toast.
+
 ## [1.13.1] - 2026-09-23
 
 Toasts are back to the normal text size, and the book-matching list now lets you search by title, author, ISBN, or Goodreads ID when the automatic match isn't right.
