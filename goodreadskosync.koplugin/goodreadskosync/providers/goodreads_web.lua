@@ -43,6 +43,9 @@ function GoodreadsWeb:get_capabilities()
         completion = true,
         rating = true,
         authentication = true,
+        reading_challenge = true,
+        reading_goal = true,
+        reading_stats = true,
     }
 end
 
@@ -200,6 +203,22 @@ function GoodreadsWeb:clear_rating(_book_id)
     -- Goodreads has no explicit "clear" in the classic endpoints; rating 0 is
     -- not accepted. Report unsupported rather than guess.
     return false, Constants.ERROR.UNSUPPORTED
+end
+
+function GoodreadsWeb:get_reading_challenge()
+    return self:_with_client(function(client)
+        return client:get_reading_challenge()
+    end, { best_effort = true })
+end
+
+function GoodreadsWeb:set_reading_goal(goal)
+    return self:_with_client(function(client) return client:set_reading_goal(goal) end)
+end
+
+function GoodreadsWeb:get_reading_stats(user_id)
+    return self:_with_client(function(client)
+        return client:get_reading_stats(user_id)
+    end, { best_effort = true })
 end
 
 return GoodreadsWeb

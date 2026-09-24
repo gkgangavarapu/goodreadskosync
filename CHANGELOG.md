@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-09-24
+
+A new **Reading** section in the main menu brings your Goodreads Reading Challenge onto the device.
+
+**Reading challenge**
+- Shows your annual goal, how many books you've read, the percentage, how many days are left, and whether you're ahead of or behind schedule.
+
+**Change reading goal**
+- Set or update your annual goal from KOReader, no need to open the website.
+
+**Reading stats**
+- A year-by-year list of how many books you've finished, with a total.
+
+All three are read/one-tap actions and do not change how existing sync, linking, notes, ratings, or shelves work.
+
 ## [1.14.0] - 2026-09-24
 
 The menu is tidier: the everyday actions stay up front, and the rest moved under **More**. Linking a book by hand is now one consistent flow. And there's a gentle, occasional reminder that you can support the project.

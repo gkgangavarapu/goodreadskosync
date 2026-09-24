@@ -88,4 +88,39 @@ describe("goodreads.api", function()
         assert_equal(Constants.SHELF.CURRENTLY_READING, state.shelf)
         assert_equal(4, state.rating)
     end)
+
+    it("reads the annual reading challenge", function()
+        local json = '{"daysRemaining":98,"readingGoal":12,"readingProgress":10,"booksRead":"[]"}'
+        local client = client_with({ { status = 200, body = json } })
+        local challenge = client:get_reading_challenge()
+        assert_equal(12, challenge.goal)
+        assert_equal(10, challenge.books_read)
+    end)
+
+    it("writes the reading goal using the WAF token", function()
+        local page = [[<input type='hidden' name='anti-csrftoken-a2z' value='TOK' />]]
+        local client, _, calls = client_with({ { status = 200, body = page }, { status = 200 } })
+        assert_true(client:set_reading_goal(30))
+        assert_true(calls[1].url:find("/readingchallenges/annual", 1, true) ~= nil)
+        assert_true(calls[2].url:find("newGoal=30", 1, true) ~= nil)
+        assert_equal("TOK", calls[2].headers["anti-csrftoken-a2z"])
+    end)
+
+    it("rejects an invalid reading goal before any request", function()
+        local client, _, calls = client_with({ { status = 200 } })
+        local ok, err = client:set_reading_goal(0)
+        assert_false(ok)
+        assert_equal(Constants.ERROR.INVALID_REQUEST, err)
+        assert_equal(0, #calls)
+    end)
+
+    it("reads per-year reading stats", function()
+        local html = [[<span class="left year">2026</span> <span class="count">10</span>]]
+        local client, http = client_with({ { status = 200, body = html } })
+        http.user_id = "999"
+        local years = client:get_reading_stats()
+        assert_equal(1, #years)
+        assert_equal(2026, years[1].year)
+        assert_equal(10, years[1].books)
+    end)
 end)

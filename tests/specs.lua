@@ -16,6 +16,7 @@ return {
     "specs.auth_manager_spec",
     "specs.login_spec",
     "specs.client_spec",
+    "specs.reading_spec",
     "specs.goodreads_web_spec",
     "specs.update_spec",
     "specs.support_qr_spec",

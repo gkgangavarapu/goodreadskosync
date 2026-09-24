@@ -70,6 +70,9 @@ function Mock:get_capabilities()
         completion = true,
         rating = true,
         authentication = true,
+        reading_challenge = true,
+        reading_goal = true,
+        reading_stats = true,
     }
 end
 
@@ -261,6 +264,52 @@ function Mock:clear_rating(book_id)
     state.rating_updated_at = os.time()
     self:_persist()
     return true
+end
+
+-- Reading Challenge / stats (offline approximations for tests and mock runs).
+
+function Mock:get_reading_challenge()
+    local goal = tonumber(state_store():get("challenge_goal")) or 0
+    local books = {}
+    for _, book in ipairs(self.catalog) do
+        local state = self._states[tostring(book.goodreads_id)] or {}
+        if state.shelf == Constants.SHELF.READ then
+            books[#books + 1] = { book_uri = "kca://book/" .. tostring(book.goodreads_id) }
+        end
+    end
+    return {
+        goal = goal,
+        books_read = #books,
+        days_remaining = 100,
+        books = books,
+    }
+end
+
+function Mock:set_reading_goal(goal)
+    goal = tonumber(goal)
+    if not goal or goal < 1 or goal ~= math.floor(goal) then
+        return false, Constants.ERROR.INVALID_REQUEST
+    end
+    local store = state_store()
+    store:set("challenge_goal", goal)
+    store:flush()
+    return true, goal
+end
+
+function Mock:get_reading_stats()
+    local counts = {}
+    for _, book in ipairs(self.catalog) do
+        local state = self._states[tostring(book.goodreads_id)] or {}
+        if state.shelf == Constants.SHELF.READ then
+            counts[2026] = (counts[2026] or 0) + 1
+        end
+    end
+    local years = {}
+    for year, count in pairs(counts) do
+        years[#years + 1] = { year = year, books = count }
+    end
+    table.sort(years, function(a, b) return a.year > b.year end)
+    return years
 end
 
 return Mock

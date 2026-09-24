@@ -157,6 +157,19 @@ function Base:clear_rating()
     return false, Constants.ERROR.PROVIDER_UNAVAILABLE
 end
 
+-- Reading Challenge / stats (optional extras).
+function Base:get_reading_challenge()
+    return nil, Constants.ERROR.PROVIDER_UNAVAILABLE
+end
+
+function Base:set_reading_goal()
+    return false, Constants.ERROR.PROVIDER_UNAVAILABLE
+end
+
+function Base:get_reading_stats()
+    return nil, Constants.ERROR.PROVIDER_UNAVAILABLE
+end
+
 -- Capabilities let the sync engine adapt without provider-specific checks.
 function Base:get_capabilities()
     return {
@@ -166,6 +179,9 @@ function Base:get_capabilities()
         completion = true,
         rating = true,
         authentication = false,
+        reading_challenge = false,
+        reading_goal = false,
+        reading_stats = false,
     }
 end
 

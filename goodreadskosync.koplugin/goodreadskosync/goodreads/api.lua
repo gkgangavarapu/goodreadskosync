@@ -13,6 +13,7 @@ itself.
 local Constants = require("goodreadskosync.constants")
 local Json = require("goodreadskosync.goodreads.json")
 local Logging = require("goodreadskosync.logging")
+local Reading = require("goodreadskosync.reading")
 
 local Api = {}
 Api.__index = Api
@@ -457,6 +458,78 @@ function Api:set_rating(book_id, rating)
     })
     if resp.error then return false, resp.error end
     return true, value
+end
+
+--------------------------------------------------------------------------------
+-- Reading Challenge / stats (read-mostly extras)
+--------------------------------------------------------------------------------
+
+-- Annual Reading Challenge progress. Returns
+--   { goal, books_read, days_remaining, books = { {book_uri, asin, date_read} } }
+function Api:get_reading_challenge()
+    local resp = self.http:get(self.base_url .. "/readingchallenges/goals/data", {
+        follow = true,
+        detect_auth = true,
+        headers = { ["Accept"] = "application/json, text/plain, */*" },
+    })
+    if resp.error then return nil, resp.error end
+    return Reading.parseChallenge(resp.body)
+end
+
+-- The goal write is protected by an AWS WAF token that the annual page embeds
+-- as a hidden input. Fetch that token, then post the new goal with it.
+function Api:_reading_waf_token()
+    local resp = self.http:get(self.base_url .. "/readingchallenges/annual", {
+        follow = true,
+        detect_auth = true,
+    })
+    if resp.error then return nil, resp.error end
+    local token = Reading.hiddenInput(resp.body, "anti-csrftoken-a2z")
+    if not token then return nil, Constants.ERROR.INVALID_RESPONSE end
+    return token
+end
+
+function Api:set_reading_goal(goal)
+    goal = tonumber(goal)
+    if not goal or goal < 1 or goal > 100000 or goal ~= math.floor(goal) then
+        return false, Constants.ERROR.INVALID_REQUEST
+    end
+    local token, err = self:_reading_waf_token()
+    if not token then return false, err end
+
+    local resp = self.http:request("POST",
+        self.base_url .. "/readingchallenges/updateGoal?newGoal=" .. tostring(goal),
+        {
+            follow = true,
+            detect_auth = true,
+            headers = {
+                ["anti-csrftoken-a2z"] = token,
+                ["X-Requested-With"] = "XMLHttpRequest",
+                ["Referer"] = self.base_url .. "/readingchallenges/annual",
+            },
+        })
+    if resp.error then return false, resp.error end
+    return true, goal
+end
+
+-- Per-year book counts from the reading-stats page.
+-- Returns { { year = 2026, books = 10 }, ... }.
+function Api:get_reading_stats(user_id)
+    user_id = user_id or self.http.user_id
+    if not user_id then
+        local _, err = self:ensure_csrf()
+        if err then return nil, err end
+        user_id = self.http.user_id
+    end
+    if not user_id then return nil, Constants.ERROR.AUTH_REQUIRED end
+
+    local resp = self.http:get(
+        self.base_url .. "/review/stats/" .. tostring(user_id), {
+            follow = true,
+            detect_auth = true,
+        })
+    if resp.error then return nil, resp.error end
+    return Reading.parseStats(resp.body)
 end
 
 Api._parse_ldjson_book = parse_ldjson_book

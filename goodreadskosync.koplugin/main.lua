@@ -1053,6 +1053,11 @@ for name, fn in pairs(require("goodreadskosync.ui.notes")) do
     Goodreads[name] = fn
 end
 
+-- Reading Challenge / stats UI lives in ui/reading.lua.
+for name, fn in pairs(require("goodreadskosync.ui.reading")) do
+    Goodreads[name] = fn
+end
+
 -- Turn a GitHub release body into short plain text for the update prompt.
 function Goodreads:formatReleaseNotes(text)
     if type(text) ~= "string" or text == "" then return nil end

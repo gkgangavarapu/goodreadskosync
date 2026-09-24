@@ -140,6 +140,23 @@ function Menu:buildMenu()
             },
         },
         {
+            text = _("Reading"),
+            sub_item_table = {
+                {
+                    text = _("Reading challenge"),
+                    callback = function() self:showReadingChallenge() end,
+                },
+                {
+                    text = _("Change reading goal…"),
+                    callback = function() self:promptReadingGoal() end,
+                },
+                {
+                    text = _("Reading stats"),
+                    callback = function() self:showReadingStats() end,
+                },
+            },
+        },
+        {
             text = _("Test connection"),
             callback = function() self:testConnection() end,
         },
