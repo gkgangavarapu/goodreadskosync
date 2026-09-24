@@ -14,20 +14,20 @@ A Community KOReader plugin. Install it from **KOReader Storefront** or manually
 
 ## Screenshots
 
-| Reading Challenge | Reading stats |
+| Reading Challenge | Main menu |
 | --- | --- |
-| <img src="docs/screenshots/10-reading-challenge.png" width="380"> | <img src="docs/screenshots/11-reading-stats.png" width="380"> |
+| <img src="docs/screenshots/10-reading-challenge.png" width="380"> | <img src="docs/screenshots/02-main-menu.png" width="380"> |
 
-| Main menu | Set status on Goodreads |
+<details>
+<summary><b>More screenshots</b></summary>
+
+| Reading stats | Set status on Goodreads |
 | --- | --- |
-| <img src="docs/screenshots/02-main-menu.png" width="380"> | <img src="docs/screenshots/03-set-status.png" width="380"> |
+| <img src="docs/screenshots/11-reading-stats.png" width="380"> | <img src="docs/screenshots/03-set-status.png" width="380"> |
 
 | This book | Rate a book |
 | --- | --- |
 | <img src="docs/screenshots/04-this-book-menu.png" width="380"> | <img src="docs/screenshots/05-rate-book.png" width="380"> |
-
-<details>
-<summary><b>More screenshots</b></summary>
 
 | Signed in on-device | Sync presets |
 | --- | --- |
