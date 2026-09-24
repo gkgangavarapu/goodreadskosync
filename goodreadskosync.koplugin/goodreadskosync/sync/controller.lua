@@ -521,11 +521,29 @@ function Controller:syncSilently(opts)
                 Widgets.notify(self:_syncFailToast(summary.error, summary.title), 3)
             end
         end
-        if summary.ok then self:maybePromptRating(summary) end
+        if summary.ok then
+            self:maybePromptRating(summary)
+            self:maybeSupportToast()
+        end
         if self._sync_queued then
             self._sync_queued = false
             self:syncSilently()
         end
+    end)
+end
+
+-- Occasional, low-key reminder that the project can be supported. Shown at
+-- most once every SUPPORT_TOAST_INTERVAL, a few seconds after a successful
+-- sync so it never competes with the sync toast itself.
+function Controller:maybeSupportToast()
+    if self:getSetting("support_tips") == false then return end
+    local now = os.time()
+    local last = tonumber(self:getSetting("support_toast_at")) or 0
+    if now - last < Constants.SUPPORT_TOAST_INTERVAL then return end
+    self:setSetting("support_toast_at", now)
+    UIManager:scheduleIn(5, function()
+        Widgets.notify(
+            _("Enjoying Goodreads KO Sync? You can support its development from the menu."), 5)
     end)
 end
 
@@ -552,6 +570,7 @@ function Controller:_reportSyncSummary(summary)
                 or _("Already up to date"), 4)
         end
         self:maybePromptRating(summary)
+        self:maybeSupportToast()
     else
         self:setSetting("last_sync_error", summary.error or Constants.ERROR.SERVER_ERROR)
         self:setSetting("last_sync_error_at", os.time())

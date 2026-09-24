@@ -78,7 +78,7 @@ function Status.show(data, handlers)
             end,
         } },
         { {
-            text = _("Change book"),
+            text = _("Find book"),
             callback = function()
                 UIManager:close(dialog)
                 if handlers.change_book then handlers.change_book() end

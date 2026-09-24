@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-09-24
+
+The menu is tidier: the everyday actions stay up front, and the rest moved under **More**. Linking a book by hand is now one consistent flow. And there's a gentle, occasional reminder that you can support the project.
+
+**Menu**
+- Main menu: **Sync now**, **Set status on Goodreads**, **This book**, **Test connection**, **Version** (tap it to check for updates), **More**, and **Support this project** at the bottom.
+- **More** now holds **Account**, **Settings**, **Sync status**, **Waiting to sync**, and **Clear failed syncs**.
+- **Test connection** moved to the main menu; the version entry now checks for updates when tapped.
+
+**Linking a book**
+- "Find on Goodreads" opens a small menu with **Find manually** then **Find automatically**.
+- **Find manually** — and the "Couldn't link this book" screen — open the same prompt for a title, author, ISBN, or Goodreads ID.
+- The separate "Enter ISBN", "Enter Goodreads ID", and "Change linked book" entries were removed since they all did the same thing, and the book-status screen's "Change book" now uses the same prompt.
+
+**Support**
+- After a successful sync, a small, non-intrusive reminder about supporting the project appears at most once every two weeks. Turn it off in **More → Settings → Support reminders**.
+
 ## [1.13.5] - 2026-09-23
 
 Reverted the recent toast styling experiments so notifications render exactly like before. The fix that stopped a sync notification from failing to appear is kept, and toasts still show the book name in two words with what changed.

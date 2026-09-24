@@ -57,6 +57,8 @@ local DEFAULT_SETTINGS = {
     completion_behavior = Constants.COMPLETION_BEHAVIOR.EXPLICIT_ONLY,
     sync_preset = "medium",
     logging = false,
+    -- Occasional, low-key "support the project" toast after a successful sync.
+    support_tips = true,
 }
 
 local Goodreads = WidgetContainer:extend{
@@ -272,40 +274,22 @@ function Goodreads:identifyCurrent(opts)
     return self:runWhenOnline(function() return self:_identifyCurrent(opts) end)
 end
 
--- "Change linked book": let the user type a title/author/ISBN/Goodreads ID and
--- search, then pick the right match.
-function Goodreads:promptChangeLinkedBook()
+-- The single manual-linking entry point: prompt for a title/author/ISBN/
+-- Goodreads ID, search, then let the user pick the right match. Used by "find
+-- manually", the "couldn't link it" screen, and the candidate list.
+function Goodreads:promptFindBook()
     if not self:hasDocument() then
         Widgets.message(_("Open a book first."))
         return
     end
-    local InputDialog = require("ui/widget/inputdialog")
-    local dialog
-    dialog = InputDialog:new{
-        title = _("Change linked book"),
-        description = _("Enter a title, author, ISBN, or Goodreads ID."),
-        input = "",
-        buttons = { {
-            { text = _("Cancel"), callback = function() UIManager:close(dialog) end },
-            {
-                text = _("Search"),
-                callback = function()
-                    local query = dialog:getInputText()
-                    UIManager:close(dialog)
-                    if query and query ~= "" then
-                        self:identifyCurrent({
-                            ignore_mapping = true,
-                            no_cache = true,
-                            choose = true,
-                            query = query,
-                        })
-                    end
-                end,
-            },
-        } },
-    }
-    UIManager:show(dialog)
-    dialog:onShowKeyboard()
+    SearchUI.manual(function(query)
+        self:identifyCurrent({
+            ignore_mapping = true,
+            no_cache = true,
+            choose = true,
+            query = query,
+        })
+    end)
 end
 
 function Goodreads:_identifyCurrent(opts)
@@ -354,7 +338,7 @@ function Goodreads:_handleResolution(result, identity, metadata, filename, choos
         if has_candidates then
             IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
                 self:confirmMapping(result, candidate)
-            end, function() self:promptChangeLinkedBook() end)
+            end, function() self:promptFindBook() end)
         else
             self:showUnidentified(identity, metadata, filename)
         end
@@ -372,7 +356,7 @@ function Goodreads:_handleResolution(result, identity, metadata, filename, choos
         else
             IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
                 self:confirmMapping(result, candidate)
-            end, function() self:promptChangeLinkedBook() end)
+            end, function() self:promptFindBook() end)
         end
     elseif result.status == "error" then
         Widgets.notify(_("No network · will retry"))
@@ -421,20 +405,9 @@ function Goodreads:linkCandidate(result, candidate)
 end
 
 function Goodreads:showUnidentified(identity, metadata, filename)
-    local id = identity or {}
     IdentifyUI.showUnidentified(identity, {
+        find_manually = function() self:promptFindBook() end,
         find = function() self:searchManual(metadata, filename, nil) end,
-        enter_isbn = function()
-            SearchUI.prompt(_("Enter ISBN"), id.isbn13, function(value)
-                self:searchManual(metadata, filename, value)
-            end)
-        end,
-        enter_goodreads_id = function()
-            SearchUI.prompt(_("Enter Goodreads ID"), id.goodreads_id,
-                function(value) self:useGoodreadsId(identity, value) end,
-                _("Use"))
-        end,
-        search_manual = function() self:searchManual(metadata, filename, nil) end,
         snooze = function() self:snoozeIdentify(identity) end,
         cancel = function() end,
     })
@@ -462,7 +435,7 @@ function Goodreads:_searchManual(metadata, filename, query)
     if result.candidates and #result.candidates > 0 then
         IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
             self:confirmMapping(result, candidate)
-        end, function() self:promptChangeLinkedBook() end)
+        end, function() self:promptFindBook() end)
     else
         Widgets.message(_("No matches found."))
     end
@@ -470,27 +443,6 @@ end
 
 function Goodreads:confirmMapping(result, candidate)
     self:linkCandidate(result, candidate)
-end
-
-function Goodreads:useGoodreadsId(identity, value)
-    if not identity then return end
-    if not value or not value:match("^%d+$") then
-        Widgets.message(_("Invalid Goodreads ID."))
-        return
-    end
-    local record = {
-        local_key = identity.local_key,
-        goodreads_id = value,
-        isbn13 = identity.isbn13,
-        isbn10 = identity.isbn10,
-        asin = identity.asin,
-        title = identity.title,
-        author = identity.primary_author,
-        authors = identity.authors,
-        confirmed = true,
-    }
-    Mappings.put(identity.local_key, record)
-    Widgets.message(_("Book identified."))
 end
 
 function Goodreads:forgetMapping()
@@ -563,9 +515,7 @@ function Goodreads:showStatus()
     }, {
         sync_now = function() self:syncNow() end,
         rate = function() self:rateCurrentBook() end,
-        change_book = function()
-            self:identifyCurrent({ ignore_mapping = true, no_cache = true })
-        end,
+        change_book = function() self:promptFindBook() end,
     })
 end
 
@@ -573,7 +523,7 @@ end
 function Goodreads:maybeOnboard()
     if self:getSetting("onboarded") then return end
     self:setSetting("onboarded", true)
-    Widgets.notify(_("Ready · sign in from Account"), 6)
+    Widgets.notify(_("Ready · sign in from Menu → More → Account"), 6)
 end
 
 -- After a book is finished, mention rating once per book (toast only).
@@ -1190,7 +1140,7 @@ end
 function Goodreads:promptLoginOnOpen()
     if self._login_prompted then return end
     self._login_prompted = true
-        Widgets.notify(_("Session expired · sign in from Account"), 6)
+        Widgets.notify(_("Session expired · sign in from Menu → More → Account"), 6)
 end
 
 -- Build a progress payload that preserves the chosen unit (percent or pages).

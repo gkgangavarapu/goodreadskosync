@@ -8,13 +8,10 @@ Mixed into the plugin as methods (`self` is the plugin instance).
 
 local Auth = require("goodreadskosync.auth.manager")
 local Constants = require("goodreadskosync.constants")
-local InfoMessage = require("ui/widget/infomessage")
 local Queue = require("goodreadskosync.sync.queue")
 local SettingsUI = require("goodreadskosync.ui.settings")
 local State = require("goodreadskosync.sync.state")
 local SupportUI = require("goodreadskosync.ui.support")
-local UIManager = require("ui/uimanager")
-local Update = require("goodreadskosync.update")
 local Widgets = require("goodreadskosync.ui.widgets")
 local _ = require("gettext")
 
@@ -39,10 +36,6 @@ function Menu:accountMenuItems()
     items[#items + 1] = {
         text = _("Account status"),
         callback = function() self:showAccount() end,
-    }
-    items[#items + 1] = {
-        text = _("Test connection"),
-        callback = function() self:testConnection() end,
     }
     items[#items + 1] = {
         text = _("Forget saved password"),
@@ -74,6 +67,24 @@ function Menu:setStatusMenuItems()
     return items
 end
 
+-- "Find on Goodreads" submenu: manual search first, then automatic. The manual
+-- entry opens the single shared prompt so the user can type a
+-- title/author/ISBN/Goodreads ID themselves.
+function Menu:findOnGoodreadsMenuItems()
+    return {
+        {
+            text = _("Find manually"),
+            enabled_func = function() return self:hasDocument() end,
+            callback = function() self:promptFindBook() end,
+        },
+        {
+            text = _("Find automatically"),
+            enabled_func = function() return self:hasDocument() end,
+            callback = function() self:identifyCurrent({ no_cache = true }) end,
+        },
+    }
+end
+
 function Menu:buildMenu()
     return {
         {
@@ -86,25 +97,14 @@ function Menu:buildMenu()
             sub_item_table_func = function() return self:setStatusMenuItems() end,
         },
         {
-            text = _("Support this project"),
-            callback = function() SupportUI.show() end,
-        },
-        {
-            text = _("Account"),
-            sub_item_table_func = function() return self:accountMenuItems() end,
-        },
-        {
             text = _("This book"),
             sub_item_table = {
                 {
                     text = _("Find on Goodreads"),
                     enabled_func = function() return self:hasDocument() end,
-                    callback = function() self:identifyCurrent({ no_cache = true }) end,
-                },
-                {
-                    text = _("Change linked book"),
-                    enabled_func = function() return self:hasDocument() end,
-                    callback = function() self:promptChangeLinkedBook() end,
+                    sub_item_table_func = function()
+                        return self:findOnGoodreadsMenuItems()
+                    end,
                 },
                 {
                     text = _("Rate this book"),
@@ -140,27 +140,29 @@ function Menu:buildMenu()
             },
         },
         {
-            text = _("Settings"),
-            sub_item_table_func = function() return SettingsUI.build(self) end,
+            text = _("Test connection"),
+            callback = function() self:testConnection() end,
+        },
+        {
+            -- Tapping the version checks GitHub for a newer release.
+            text_func = function()
+                return string.format(_("Version: %s"), Constants.VERSION)
+            end,
+            callback = function() self:checkForUpdates(true) end,
         },
         {
             text = _("More"),
             sub_item_table = {
+                {
+                    text = _("Account"),
+                    sub_item_table_func = function() return self:accountMenuItems() end,
+                },
+                {
+                    text = _("Settings"),
+                    sub_item_table_func = function() return SettingsUI.build(self) end,
+                },
                 { text = _("Sync status"), callback = function() self:showDiagnostics() end },
                 { text = _("Waiting to sync"), callback = function() self:showQueue() end },
-                { text = _("Check for updates"), callback = function() self:checkForUpdates(true) end },
-                {
-                    text_func = function()
-                        return string.format(_("Version: %s"), Constants.VERSION)
-                    end,
-                    callback = function()
-                        UIManager:show(InfoMessage:new{
-                            text = string.format(_("Goodreads KO Sync v%s\n%s"),
-                                Constants.VERSION, Update.PAGE_URL),
-                            timeout = 10,
-                        })
-                    end,
-                },
                 {
                     text = _("Clear failed syncs"),
                     callback = function()
@@ -169,6 +171,11 @@ function Menu:buildMenu()
                     end,
                 },
             },
+        },
+        -- Kept at the bottom, out of the way.
+        {
+            text = _("Support this project"),
+            callback = function() SupportUI.show() end,
         },
     }
 end

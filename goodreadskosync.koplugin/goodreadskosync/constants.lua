@@ -8,7 +8,7 @@ the resolver and sync engine remain usable from unit tests without KOReader.
 --]]
 
 local Constants = {
-    VERSION = "1.13.5",
+    VERSION = "1.14.0",
 
     -- Storage schema version. Bump only alongside a migration function.
     SCHEMA_VERSION = 1,
@@ -115,6 +115,10 @@ local Constants = {
 
     -- Background update check interval, in seconds (about once a day).
     UPDATE_CHECK_INTERVAL = 24 * 60 * 60,
+
+    -- Minimum gap between the low-key "support the project" toasts shown after
+    -- a successful sync, in seconds (about once every two weeks).
+    SUPPORT_TOAST_INTERVAL = 14 * 24 * 60 * 60,
 
     -- Search cache lifetime, in seconds (7 days).
     SEARCH_CACHE_TTL = 7 * 24 * 60 * 60,

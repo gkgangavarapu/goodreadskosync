@@ -96,7 +96,7 @@ function Widgets.candidateDialog(candidates, on_select, opts)
     end
     if opts.on_manual_search then
         buttons[#buttons + 1] = { {
-            text = _("Search by title / author / ISBN…"),
+            text = _("Find manually…"),
             callback = function()
                 UIManager:close(dialog)
                 opts.on_manual_search()

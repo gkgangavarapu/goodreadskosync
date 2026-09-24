@@ -1,5 +1,8 @@
 --[[--
-Manual search / identifier entry dialogs.
+Manual book-search prompt (single entry point).
+
+One dialog is used everywhere the user links a book by hand, so "couldn't find
+it", "change linked book" and "find manually" all behave the same way.
 
 @module koplugin.goodreads.ui.search
 --]]
@@ -10,33 +13,31 @@ local _ = require("gettext")
 
 local SearchUI = {}
 
--- Generic text prompt. `on_submit(text)` is called with the entered value.
-function SearchUI.prompt(title, initial, on_submit, submit_text)
+-- Prompt for a title, author, ISBN, or Goodreads ID.
+-- `on_submit(query)` is called with the non-empty entered value.
+function SearchUI.manual(on_submit)
     local dialog
     dialog = InputDialog:new{
-        title = title,
-        input = initial or "",
+        title = _("Find book on Goodreads"),
+        description = _("Enter a title, author, ISBN, or Goodreads ID."),
+        input = "",
         buttons = { {
             {
                 text = _("Cancel"),
                 callback = function() UIManager:close(dialog) end,
             },
             {
-                text = submit_text or _("Search"),
+                text = _("Search"),
                 callback = function()
                     local value = dialog:getInputText()
                     UIManager:close(dialog)
-                    on_submit(value)
+                    if value and value ~= "" then on_submit(value) end
                 end,
             },
         } },
     }
     UIManager:show(dialog)
     dialog:onShowKeyboard()
-end
-
-function SearchUI.show(initial, on_submit)
-    SearchUI.prompt(_("Search Goodreads"), initial, on_submit)
 end
 
 return SearchUI

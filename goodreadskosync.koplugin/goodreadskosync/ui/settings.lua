@@ -66,7 +66,7 @@ function SettingsUI.build(plugin)
         },
         {
             text = _("Link books automatically"),
-            help_text = _("Link an opened book to the best Goodreads match and show a small notification. Change it anytime from This book → Change linked book."),
+            help_text = _("Link an opened book to the best Goodreads match and show a small notification. Change it anytime from This book → Find on Goodreads → Find manually."),
             checked_func = checked("auto_link"),
             callback = toggle("auto_link"),
         },
@@ -92,8 +92,14 @@ This is a testing convenience only: KOReader has no secure keystore. Turn it off
             end,
         },
         {
+            text = _("Support reminders"),
+            help_text = _("Show a small reminder about supporting the project after a sync, at most once every two weeks."),
+            checked_func = checked("support_tips"),
+            callback = toggle("support_tips"),
+        },
+        {
             text = _("Check for updates automatically"),
-            help_text = _("Check GitHub Releases about once a day and offer to update. You can also check any time from More → Check for updates."),
+            help_text = _("Check GitHub Releases about once a day and offer to update. You can also tap the version in the main menu to check any time."),
             checked_func = checked("auto_update_check"),
             callback = toggle("auto_update_check"),
         },
