@@ -32,4 +32,22 @@ describe("storage", function()
         store:flush()
         assert_false(Storage.open("deleteme"):has("a"))
     end)
+
+    it("persists deletions through the LuaSettings backend", function()
+        -- LuaSettings keeps every saved key, so a delete must call delSetting
+        -- or the value reappears on the next open (e.g. saved password).
+        local ls = {
+            data = { email = "a@b.c", password = "secret" },
+            saveSetting = function(self, k, v) self.data[k] = v end,
+            delSetting = function(self, k) self.data[k] = nil end,
+            flush = function(self) self.flushed = true end,
+        }
+        local store = Storage._open_luasettings("/tmp/test.lua", ls)
+        assert_equal("secret", store:get("password"))
+        store:delete("password")
+        assert_true(store:flush())
+        assert_nil(ls.data.password)
+        assert_equal("a@b.c", ls.data.email)
+        assert_true(ls.flushed)
+    end)
 end)

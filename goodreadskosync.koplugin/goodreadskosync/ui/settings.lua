@@ -77,11 +77,11 @@ function SettingsUI.build(plugin)
             callback = toggle("mark_started_immediately"),
         },
         {
-            text = _("Remember password (testing)"),
+            text = _("Remember password"),
             help_text = _([[
-Stores your Goodreads password in plain text on this device so you do not have to re-enter it every time the session expires.
+On by default: saves your Goodreads password on this device so you do not have to re-enter it when the session expires.
 
-This is a testing convenience only: KOReader has no secure keystore. Turn it off (or use "Forget saved password") to remove the saved value.]]),
+KOReader has no secure keystore. It is encrypted when possible and plain text otherwise. Turn this off to delete the saved password.]]),
             checked_func = checked("remember_password"),
             callback = function()
                 local enabled = not plugin:getSetting("remember_password")

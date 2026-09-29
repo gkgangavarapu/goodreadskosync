@@ -17,6 +17,16 @@ local Storage = require("goodreadskosync.storage")
 
 local Queue = {}
 
+-- Seed the RNG once so unique keys cannot collide across calls that land in
+-- the same second (Lua's default sequence is otherwise identical per process).
+do
+    local seed = os.time()
+    if os.clock then seed = seed + math.floor((os.clock() or 0) * 1000000) end
+    math.randomseed(seed)
+end
+
+local unique_counter = 0
+
 local function store()
     return Storage.open(Constants.STORAGE.QUEUE)
 end
@@ -24,6 +34,22 @@ end
 function Queue.idempotencyKey(operation)
     return string.format("%s:%s", operation.operation or "?",
         tostring(operation.book_id or "?"))
+end
+
+-- Queue key for an operation. Idempotent operations share `operation:book` so
+-- repeated enqueues coalesce; unique operations (notes) get their own key.
+function Queue.keyFor(operation, unique)
+    if operation.uid then
+        return string.format("%s:%s:%s", operation.operation,
+            tostring(operation.book_id or "?"), tostring(operation.uid))
+    end
+    if unique then
+        unique_counter = unique_counter + 1
+        return string.format("%s:%s:u%d-%d-%d", operation.operation,
+            tostring(operation.book_id or "?"), os.time(), unique_counter,
+            math.random(1, 1000000000))
+    end
+    return Queue.idempotencyKey(operation)
 end
 
 -- operation = { operation, book_id, payload, uid? }
@@ -36,18 +62,7 @@ function Queue.enqueue(operation, opts)
     opts = opts or {}
     local s = store()
     local ops = s:get("ops", {})
-    local key
-    if operation.uid then
-        key = string.format("%s:%s:%s", operation.operation,
-            tostring(operation.book_id or "?"), tostring(operation.uid))
-    elseif opts.unique then
-        key = string.format("%s:%s:u%d-%d", operation.operation,
-            tostring(operation.book_id or "?"), os.time(),
-            math.random(1, 100000000))
-    else
-        key = Queue.idempotencyKey(operation)
-    end
-
+    local key = Queue.keyFor(operation, opts.unique)
     local now = os.time()
     local existing = ops[key]
     if existing then
@@ -130,11 +145,11 @@ function Queue.markFailure(op_id, error)
     op.last_error = error
     op.updated_at = os.time()
     local became_failed = false
-    if op.attempts >= #Constants.BACKOFF then
+    if op.attempts > #Constants.BACKOFF then
         op.failed = true
         became_failed = true
     else
-        op.next_attempt_at = os.time() + Constants.BACKOFF[op.attempts + 1]
+        op.next_attempt_at = os.time() + Constants.BACKOFF[op.attempts]
     end
     s:set("ops", ops)
     s:flush()

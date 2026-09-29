@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-09-29
+
+Reliability fixes, and your Goodreads password is now saved by default so you don't have to sign in again.
+
+**Sign-in**
+- "Remember password" is now **on by default**. Turn it off in **More → Settings → Remember password** to delete the saved password; it's encrypted when possible and plain text otherwise.
+
+**Fixes**
+- Deleting saved data now actually persists on device — "Forget saved password" (and clearing the selected provider) previously left the value on disk.
+- A sync and a queue flush can no longer run at the same time, so a queued note or progress update can't be posted twice.
+- Queued items that fail during a sync now surface the retry notice too.
+- Note queue keys are guaranteed unique (seeded random + counter), and the retry backoff uses its full schedule before giving up.
+
 ## [1.16.0] - 2026-09-29
 
 Notes are now saved on the device first and posted one at a time in order, and failed syncs are kept so you can retry them.

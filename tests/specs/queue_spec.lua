@@ -64,7 +64,8 @@ describe("sync.queue", function()
         Queue.clear()
         Queue.enqueue({ operation = "progress", book_id = "1", payload = { percent = 10 } })
         local op_id = Queue.due()[1].id
-        for _ = 1, #Constants.BACKOFF do
+        -- Fails only after the full backoff schedule has been consumed.
+        for _ = 1, #Constants.BACKOFF + 1 do
             Queue.markFailure(op_id, Constants.ERROR.NETWORK_ERROR)
         end
         assert_true(Queue.all()[op_id].failed)

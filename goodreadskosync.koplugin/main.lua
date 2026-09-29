@@ -49,7 +49,9 @@ local DEFAULT_SETTINGS = {
     track_mode = "time",
     track_percent_step = 5,
     mark_started_immediately = true,
-    remember_password = false,
+    -- Save the password by default so the session does not have to be
+    -- re-entered; the user can turn this off in Settings (which deletes it).
+    remember_password = true,
     auto_link = false,
     update_progress_after_finished = false,
     auto_update_check = true,

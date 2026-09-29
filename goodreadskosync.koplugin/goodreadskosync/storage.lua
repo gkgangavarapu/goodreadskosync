@@ -79,6 +79,8 @@ end
 function Store:delete(key)
     self.data[key] = nil
     self.dirty = true
+    self.deleted = self.deleted or {}
+    self.deleted[key] = true
 end
 
 function Store:has(key)
@@ -95,6 +97,15 @@ function Store:flush()
     if not self.dirty then return true end
     local ok
     if self.ls then
+        -- LuaSettings keeps every key it has ever saved, so a deleted key must
+        -- be explicitly removed or it reappears the next time the file is read.
+        if self.deleted then
+            for key in pairs(self.deleted) do
+                if type(self.ls.delSetting) == "function" then
+                    self.ls:delSetting(key)
+                end
+            end
+        end
         for k, v in pairs(self.data) do
             self.ls:saveSetting(k, v)
         end
@@ -102,7 +113,10 @@ function Store:flush()
     else
         ok = self:_writeFile()
     end
-    if ok then self.dirty = false end
+    if ok then
+        self.dirty = false
+        self.deleted = nil
+    end
     return ok
 end
 
@@ -152,21 +166,24 @@ local function fallback_store(path)
     }, Store)
 end
 
-local function luasettings_store(path)
-    local ls = LuaSettings:open(path)
+-- Wrap a LuaSettings-like object (or a fake one in tests) in the Store API.
+function Storage._open_luasettings(path, ls)
     local data = {}
     -- LuaSettings stores a flat table; materialize it for a uniform interface.
-    if ls.data then
+    if ls and ls.data then
         for k, v in pairs(ls.data) do data[k] = v end
     end
-    local store = setmetatable({
+    return setmetatable({
         data = data,
         path = path,
         dir = path:match("^(.*)[/\\][^/\\]*$") or ".",
         ls = ls,
         dirty = false,
     }, Store)
-    return store
+end
+
+local function luasettings_store(path)
+    return Storage._open_luasettings(path, LuaSettings:open(path))
 end
 
 --------------------------------------------------------------------------------

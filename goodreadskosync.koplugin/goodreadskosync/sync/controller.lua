@@ -250,7 +250,9 @@ function Controller:_syncCore(inputs)
     end
     -- A just-pushed progress makes any queued progress for this book redundant.
     if pushed_progress then
-        Queue.remove("progress:" .. tostring(inputs.gid))
+        Queue.remove(Queue.idempotencyKey({
+            operation = "progress", book_id = inputs.gid,
+        }))
     end
 
     for _, result in ipairs(results) do
@@ -289,6 +291,7 @@ function Controller:_syncCore(inputs)
     if flush and (flush.sent or 0) > 0 then
         summary.changed = true
     end
+    summary.queued_failed = (flush and flush.permanent) or 0
     return summary
 end
 
@@ -298,6 +301,12 @@ function Controller:_syncNow()
         -- A background sync is already running; fold this into a follow-up.
         self._sync_queued = true
         Widgets.notify(_("Syncing…"), 2)
+        return
+    end
+    if self._queue_busy then
+        -- A queue flush is running (and syncs flush the queue themselves too);
+        -- run this sync as soon as it finishes.
+        self._sync_queued = true
         return
     end
     if not self:hasDocument() then
@@ -320,6 +329,13 @@ function Controller:_syncNow()
             return
         end
         self:_reportSyncSummary(summary)
+        if summary and summary.queued_failed and summary.queued_failed > 0 then
+            self:_notifyQueuedFailure(summary.queued_failed)
+        end
+        if self._queue_queued then
+            self._queue_queued = false
+            self:processQueue()
+        end
         if self._sync_queued then
             self._sync_queued = false
             self:syncSilently()
@@ -330,6 +346,10 @@ end
 -- "Sync now" with no book open: flush the queue, then push any linked book
 -- whose local progress advanced beyond what was last synced.
 function Controller:_syncPending()
+    if self._queue_busy then
+        self._sync_queued = true
+        return
+    end
     self._sync_busy = true
     self:runAsync(function()
         local completed, summary = self:runInBackground(
@@ -347,6 +367,13 @@ function Controller:_syncPending()
         else
             Widgets.message(_("Nothing to sync."))
         end
+        if summary and summary.queued_failed and summary.queued_failed > 0 then
+            self:_notifyQueuedFailure(summary.queued_failed)
+        end
+        if self._queue_queued then
+            self._queue_queued = false
+            self:processQueue()
+        end
         if self._sync_queued then
             self._sync_queued = false
             self:syncSilently()
@@ -358,7 +385,7 @@ function Controller:_syncPendingCore()
     local provider = self:getProvider()
     if not provider then return { ok = false, error = Constants.ERROR.PROVIDER_UNAVAILABLE } end
     -- Flush anything already queued (progress, notes, shelves, ratings).
-    self:processQueueCore()
+    local flush = self:processQueueCore()
 
     local sent, failed, changed = 0, 0, false
     for key, mapping in pairs(Mappings.all()) do
@@ -400,7 +427,8 @@ function Controller:_syncPendingCore()
         end
     end
     diag("syncPending: sent=", tostring(sent), " failed=", tostring(failed))
-    return { ok = true, changed = changed, sent = sent, failed = failed }
+    return { ok = true, changed = changed, sent = sent, failed = failed,
+        queued_failed = (flush and flush.permanent) or 0 }
 end
 
 
@@ -483,6 +511,11 @@ function Controller:syncSilently(opts)
         self._sync_queued = true
         return
     end
+    if self._queue_busy then
+        diag("syncSilently: flush running -> defer")
+        self._sync_queued = true
+        return
+    end
     local inputs = self:syncInputs(opts)
     if not inputs then
         diag("syncSilently: no inputs -> skip")
@@ -524,6 +557,13 @@ function Controller:syncSilently(opts)
         if summary.ok then
             self:maybePromptRating(summary)
             self:maybeSupportToast()
+        end
+        if summary.queued_failed and summary.queued_failed > 0 then
+            self:_notifyQueuedFailure(summary.queued_failed)
+        end
+        if self._queue_queued then
+            self._queue_queued = false
+            self:processQueue()
         end
         if self._sync_queued then
             self._sync_queued = false
@@ -721,10 +761,10 @@ end
 
 function Controller:processQueue()
     if not self:isOnline() then return end
-    -- Never run two flushes at once: two overlapping runs could pick up the
-    -- same queued item and post it twice. Fold a second request into one
-    -- follow-up run instead.
-    if self._queue_busy then
+    -- Never run two flushes at once: a sync flushes the queue itself, and two
+    -- overlapping flushes could pick up the same item and post it twice. Fold a
+    -- second request into a follow-up run instead.
+    if self._sync_busy or self._queue_busy then
         self._queue_queued = true
         return
     end
@@ -747,6 +787,11 @@ function Controller:processQueue()
         if self._queue_queued then
             self._queue_queued = false
             self:processQueue()
+        end
+        -- A sync that arrived while this flush was running.
+        if self._sync_queued and not self._sync_busy then
+            self._sync_queued = false
+            self:syncSilently()
         end
     end)
 end
