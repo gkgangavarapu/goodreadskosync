@@ -77,40 +77,24 @@ function Notes:postNote(note)
         type = "note", note = note, percent = percent,
         value = percent, unit = "percent",
     }
-    -- Offline: save it; the queue posts it once we're back online.
+
+    -- Persist locally first so a note is never lost, then flush in creation
+    -- order. Notes are not idempotent, so each gets its own queue slot and a
+    -- later note can never overwrite an earlier one.
+    Queue.enqueue({
+        operation = "note",
+        book_id = mapping.goodreads_id,
+        local_key = local_key,
+        payload = payload,
+    }, { unique = true })
+
     if not self:isOnline() then
-        Queue.enqueue({
-            operation = "note",
-            book_id = mapping.goodreads_id,
-            local_key = local_key,
-            payload = payload,
-        })
         Widgets.notify(t and string.format(_("%s · Note saved · will post when online"), t)
             or _("Note saved · will post when online"))
         return
     end
-    local provider = self:getProvider()
-    self:runAsync(function()
-        local completed, ok = self:runInBackground(_("Posting note…"), function()
-            local res = provider:update_progress(mapping.goodreads_id, percent, "percent", note)
-            if not res then
-                Queue.enqueue({
-                    operation = "note",
-                    book_id = mapping.goodreads_id,
-                    local_key = local_key,
-                    payload = payload,
-                })
-            end
-            return res
-        end)
-        if completed == false then return end
-        if ok then
-            Widgets.notify(t and string.format(_("%s · Note posted"), t) or _("Note posted"))
-        else
-            Widgets.notify(t and string.format(_("%s · Note saved · will post when online"), t)
-                or _("Note saved · will post when online"))
-        end
-    end)
+    -- Posting (and its toast) is handled by the queue flush.
+    self:processQueue()
 end
 
 return Notes

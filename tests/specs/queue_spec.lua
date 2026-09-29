@@ -81,4 +81,44 @@ describe("sync.queue", function()
         Queue.remove(op_id)
         assert_equal(0, Queue.size())
     end)
+
+    it("keeps unique operations separate (notes do not coalesce)", function()
+        Storage.reset()
+        Queue.clear()
+        Queue.enqueue({ operation = "note", book_id = "1", payload = { note = "a" } },
+            { unique = true })
+        Queue.enqueue({ operation = "note", book_id = "1", payload = { note = "b" } },
+            { unique = true })
+        assert_equal(2, Queue.size())
+    end)
+
+    it("returns queued operations oldest-first (FIFO)", function()
+        Storage.reset()
+        Queue.clear()
+        Queue.enqueue({ operation = "note", book_id = "1", payload = { note = "first" } },
+            { unique = true })
+        Queue.enqueue({ operation = "progress", book_id = "1", payload = { percent = 10 } })
+        Queue.enqueue({ operation = "note", book_id = "1", payload = { note = "third" } },
+            { unique = true })
+        local due = Queue.due()
+        assert_equal(3, #due)
+        assert_equal("first", due[1].payload.note)
+        assert_equal("progress", due[2].operation)
+        assert_equal("third", due[3].payload.note)
+    end)
+
+    it("keeps a permanently failed op for manual retry", function()
+        Storage.reset()
+        Queue.clear()
+        Queue.enqueue({ operation = "note", book_id = "1", payload = { note = "keep" } },
+            { unique = true })
+        local op_id = Queue.due()[1].id
+        Queue.markFailed(op_id, Constants.ERROR.NOT_FOUND)
+        assert_true(Queue.all()[op_id].failed)
+        assert_equal(0, #Queue.due())
+        assert_equal("keep", Queue.failed()[1].payload.note)
+        assert_equal(1, Queue.retryFailed())
+        assert_equal(0, #Queue.failed())
+        assert_equal(1, #Queue.due())
+    end)
 end)

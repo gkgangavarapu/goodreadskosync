@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-09-29
+
+Notes are now saved on the device first and posted one at a time in order, and failed syncs are kept so you can retry them.
+
+**Notes**
+- Adding several notes no longer loses all but the last one: each note gets its own queue slot and they sync in the order you added them (FIFO).
+- Notes are always stored locally first, then posted; offline notes go out automatically when you reconnect.
+
+**Failed syncs**
+- Failed changes are no longer silently removed — they are kept and listed under **More → Waiting to sync**.
+- New **More → Retry failed syncs**, plus a **Retry failed** button in the Waiting to sync dialog.
+- Only one sync flush runs at a time, so a note can't be posted twice.
+
 ## [1.15.0] - 2026-09-24
 
 A new **Reading** section in the main menu brings your Goodreads Reading Challenge onto the device.

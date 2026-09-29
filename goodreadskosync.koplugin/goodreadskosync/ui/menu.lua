@@ -181,6 +181,10 @@ function Menu:buildMenu()
                 { text = _("Sync status"), callback = function() self:showDiagnostics() end },
                 { text = _("Waiting to sync"), callback = function() self:showQueue() end },
                 {
+                    text = _("Retry failed syncs"),
+                    callback = function() self:retryFailedSyncs() end,
+                },
+                {
                     text = _("Clear failed syncs"),
                     callback = function()
                         Queue.clearFailed()

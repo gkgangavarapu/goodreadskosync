@@ -920,6 +920,22 @@ function Goodreads:showDiagnostics()
     })
 end
 
+-- Requeue failed operations so they are tried again now (or when back online).
+function Goodreads:retryFailedSyncs()
+    local n = Queue.retryFailed()
+    if n == 0 then
+        Widgets.message(_("No failed syncs to retry."))
+        return
+    end
+    if not self:isOnline() then
+        Widgets.notify(string.format(
+            _("%d to retry · will sync when online"), n), 4)
+        return
+    end
+    Widgets.notify(string.format(_("Retrying %d…"), n), 3)
+    self:processQueue()
+end
+
 function Goodreads:showQueue()
     local pending = Queue.due()
     local failed = Queue.failed()
@@ -949,6 +965,13 @@ function Goodreads:showQueue()
         } }
     end
     if #failed > 0 then
+        buttons[#buttons + 1] = { {
+            text = _("Retry failed"),
+            callback = function()
+                UIManager:close(dialog)
+                self:retryFailedSyncs()
+            end,
+        } }
         buttons[#buttons + 1] = { {
             text = _("Clear failed syncs"),
             callback = function()

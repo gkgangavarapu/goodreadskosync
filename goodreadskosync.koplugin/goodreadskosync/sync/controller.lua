@@ -649,8 +649,9 @@ function Controller:processQueueCore()
                 " book=", tostring(op.book_id), " error=", tostring(err))
             if err == Constants.ERROR.NOT_FOUND then
                 -- The client already re-asserted the shelf and retried; a
-                -- remaining 404 is permanent, so drop it instead of looping.
-                Queue.remove(op.id)
+                -- remaining 404 will not resolve by retrying, but keep it so
+                -- the user can retry or clear it from the menu.
+                Queue.markFailed(op.id, err)
                 permanent = permanent + 1
             else
                 local _, became_failed = Queue.markFailure(op.id, err)
@@ -720,16 +721,32 @@ end
 
 function Controller:processQueue()
     if not self:isOnline() then return end
+    -- Never run two flushes at once: two overlapping runs could pick up the
+    -- same queued item and post it twice. Fold a second request into one
+    -- follow-up run instead.
+    if self._queue_busy then
+        self._queue_queued = true
+        return
+    end
+    self._queue_busy = true
     self:runAsync(function()
         local completed, res = self:runInBackground(nil, function()
             return self:processQueueCore()
         end)
-        if completed == false or type(res) ~= "table" then return end
+        self._queue_busy = false
+        if completed == false or type(res) ~= "table" then
+            self._queue_queued = false
+            return
+        end
         if res.sent and res.sent > 0 then
             Widgets.notify(self:_flushToast(res.sent_info), 2)
         end
         if res.permanent and res.permanent > 0 then
             self:_notifyQueuedFailure(res.permanent)
+        end
+        if self._queue_queued then
+            self._queue_queued = false
+            self:processQueue()
         end
     end)
 end
