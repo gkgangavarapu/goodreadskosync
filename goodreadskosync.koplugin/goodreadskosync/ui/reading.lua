@@ -137,7 +137,7 @@ function ReadingUI:setReadingGoal(goal)
             if completed == false then return end
             if ok == true then
                 self:setSetting("reading_goal_cache", goal)
-                Widgets.notify(string.format(_("Reading goal set to %d"), goal))
+                Widgets.notify(string.format(_("Reading goal set to %d"), goal), 3, "trophy")
             else
                 Widgets.message(_("Couldn't save the reading goal."))
             end

@@ -34,10 +34,26 @@ jobs:
       - name: Checksum
         run: make checksum
 
+      - name: Build release notes from CHANGELOG
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Print the section for this version, from its "## [x.y.z]" heading
+          # up to the next "## [" heading.
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "Release ${GITHUB_REF_NAME}" > release_notes.md
+          fi
+          echo "----- release_notes.md -----"
+          cat release_notes.md
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release_notes.md
           files: |
             dist/goodreadskosync-*.zip
             dist/goodreadskosync-*.zip.sha256
-          generate_release_notes: true

@@ -90,7 +90,7 @@ function Notes:postNote(note)
 
     if not self:isOnline() then
         Widgets.notify(t and string.format(_("%s · Note saved · will post when online"), t)
-            or _("Note saved · will post when online"))
+            or _("Note saved · will post when online"), 3, "note")
         return
     end
     -- Posting (and its toast) is handled by the queue flush.

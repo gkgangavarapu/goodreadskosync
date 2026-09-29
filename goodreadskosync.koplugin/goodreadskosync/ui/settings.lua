@@ -37,6 +37,10 @@ function SettingsUI.build(plugin)
             plugin:setSetting(key, not plugin:getSetting(key))
         end
     end
+    local function setGlyphStyle(style)
+        plugin:setSetting("toast_glyphs", style)
+        Widgets.setGlyphStyle(style)
+    end
 
     local preset_items = {}
     -- NOTE: use an index loop, not `for _, id`: the loop variable `_` would
@@ -90,6 +94,26 @@ KOReader has no secure keystore. It is encrypted when possible and plain text ot
                     require("goodreadskosync.auth.credentials").clear()
                 end
             end,
+        },
+        {
+            text = _("Toast symbols"),
+            help_text = _([[Show a small monochrome symbol at the start of each notification. Choose Off for plain text.
+
+Prominent banners always use KOReader's built-in icons.]]),
+            sub_item_table = {
+                {
+                    text = _("Symbols"),
+                    radio = true,
+                    checked_func = function() return plugin:getSetting("toast_glyphs") ~= "none" end,
+                    callback = function() setGlyphStyle("symbols") end,
+                },
+                {
+                    text = _("Off"),
+                    radio = true,
+                    checked_func = function() return plugin:getSetting("toast_glyphs") == "none" end,
+                    callback = function() setGlyphStyle("none") end,
+                },
+            },
         },
         {
             text = _("Support reminders"),

@@ -300,7 +300,7 @@ function Controller:_syncNow()
     if self._sync_busy then
         -- A background sync is already running; fold this into a follow-up.
         self._sync_queued = true
-        Widgets.notify(_("Syncing…"), 2)
+        Widgets.notify(_("Syncing…"), 2, "sync")
         return
     end
     if self._queue_busy then
@@ -361,11 +361,11 @@ function Controller:_syncPending()
             return
         end
         if not summary or not summary.ok then
-            Widgets.message(_("Sync failed."))
+            Widgets.banner(_("Sync failed."), { kind = "warn" })
         elseif summary.changed then
-            Widgets.message(_("Progress synced to Goodreads."))
+            Widgets.banner(_("Progress synced to Goodreads."), { kind = "success" })
         else
-            Widgets.message(_("Nothing to sync."))
+            Widgets.banner(_("Nothing to sync."), { kind = "info", timeout = 4 })
         end
         if summary and summary.queued_failed and summary.queued_failed > 0 then
             self:_notifyQueuedFailure(summary.queued_failed)
@@ -539,11 +539,11 @@ function Controller:syncSilently(opts)
         if summary.auth_expired then
             self:promptLoginOnOpen()
         elseif summary.changed then
-            Widgets.notify(self:_syncToast(summary), 2)
+            Widgets.notify(self:_syncToast(summary), 2, "sync")
         elseif summary.already_read then
             local t = shortTitle(summary.title)
             Widgets.notify(t and string.format(_("%s · already Read"), t)
-                or _("Already Read · nothing to sync"), 4)
+                or _("Already Read · nothing to sync"), 4, "book")
         elseif not summary.ok then
             -- Don't fail silently, but don't nag either.
             local now = os.time()
@@ -551,7 +551,7 @@ function Controller:syncSilently(opts)
                 self._last_fail_notify = now
                 self:setSetting("last_sync_error", summary.error or Constants.ERROR.SERVER_ERROR)
                 self:setSetting("last_sync_error_at", now)
-                Widgets.notify(self:_syncFailToast(summary.error, summary.title), 3)
+                Widgets.notify(self:_syncFailToast(summary.error, summary.title), 3, "warn")
             end
         end
         if summary.ok then
@@ -583,13 +583,14 @@ function Controller:maybeSupportToast()
     self:setSetting("support_toast_at", now)
     UIManager:scheduleIn(5, function()
         Widgets.notify(
-            _("Enjoying Goodreads KO Sync? You can support its development from the menu."), 5)
+            _("Enjoying Goodreads KO Sync? You can support its development from the menu."),
+            5, "heart")
     end)
 end
 
 function Controller:_reportSyncSummary(summary)
     if not summary then
-        Widgets.message(_("Sync failed · will retry"))
+        Widgets.banner(_("Sync failed · will retry"), { kind = "warn" })
         return
     end
     if summary.auth_expired then
@@ -599,22 +600,23 @@ function Controller:_reportSyncSummary(summary)
     end
     if summary.ok then
         if summary.changed then
-            Widgets.message(self:_syncToast(summary), 5)
+            Widgets.banner(self:_syncToast(summary), { kind = "success", timeout = 5 })
         elseif summary.already_read then
             local t = shortTitle(summary.title)
-            Widgets.message(t and string.format(_("%s · already Read"), t)
-                or _("Already Read · nothing to sync"), 4)
+            Widgets.banner(t and string.format(_("%s · already Read"), t)
+                or _("Already Read · nothing to sync"), { kind = "book", timeout = 4 })
         else
             local t = shortTitle(summary.title)
-            Widgets.message(t and string.format(_("%s · already up to date"), t)
-                or _("Already up to date"), 4)
+            Widgets.banner(t and string.format(_("%s · already up to date"), t)
+                or _("Already up to date"), { kind = "info", timeout = 4 })
         end
         self:maybePromptRating(summary)
         self:maybeSupportToast()
     else
         self:setSetting("last_sync_error", summary.error or Constants.ERROR.SERVER_ERROR)
         self:setSetting("last_sync_error_at", os.time())
-        Widgets.message(self:_syncFailToast(summary.error, summary.title), 6)
+        Widgets.banner(self:_syncFailToast(summary.error, summary.title),
+            { kind = "warn", timeout = 6 })
     end
 end
 
@@ -756,7 +758,7 @@ function Controller:_notifyQueuedFailure(count)
     local text = (count == 1)
         and _("1 change couldn't sync · see Waiting to sync")
         or string.format(_("%d changes couldn't sync · see Waiting to sync"), count or 0)
-    Widgets.notify(text, 4)
+    Widgets.notify(text, 4, "warn")
 end
 
 function Controller:processQueue()
@@ -779,7 +781,7 @@ function Controller:processQueue()
             return
         end
         if res.sent and res.sent > 0 then
-            Widgets.notify(self:_flushToast(res.sent_info), 2)
+            Widgets.notify(self:_flushToast(res.sent_info), 2, "success")
         end
         if res.permanent and res.permanent > 0 then
             self:_notifyQueuedFailure(res.permanent)

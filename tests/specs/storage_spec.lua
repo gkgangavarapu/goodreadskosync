@@ -33,6 +33,19 @@ describe("storage", function()
         assert_false(Storage.open("deleteme"):has("a"))
     end)
 
+    it("treats setting a key to nil as a deletion", function()
+        local ls = {
+            data = { a = 1 },
+            saveSetting = function(self, k, v) self.data[k] = v end,
+            delSetting = function(self, k) self.data[k] = nil end,
+            flush = function() end,
+        }
+        local store = Storage._open_luasettings("/tmp/test2.lua", ls)
+        store:set("a", nil)
+        assert_true(store:flush())
+        assert_nil(ls.data.a)
+    end)
+
     it("persists deletions through the LuaSettings backend", function()
         -- LuaSettings keeps every saved key, so a delete must call delSetting
         -- or the value reappears on the next open (e.g. saved password).

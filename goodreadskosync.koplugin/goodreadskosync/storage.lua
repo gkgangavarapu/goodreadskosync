@@ -72,6 +72,11 @@ function Store:get(key, default)
 end
 
 function Store:set(key, value)
+    -- Treat nil as "remove this key" so clearing a setting persists (LuaSettings
+    -- keeps keys it has seen, so a plain nil assignment would not stick).
+    if value == nil then
+        return self:delete(key)
+    end
     self.data[key] = value
     self.dirty = true
 end

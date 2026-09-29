@@ -6,8 +6,10 @@ Shared UI widgets.
 
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
+local Font = require("ui/font")
 local InfoMessage = require("ui/widget/infomessage")
 local Size = require("ui/size")
+local ToastGlyphs = require("goodreadskosync.toast_glyphs")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 
@@ -22,40 +24,81 @@ local function brand(text)
     return string.format("%s: %s", BRAND, s)
 end
 
-function Widgets.message(text, timeout)
+-- kind (optional) picks an icon: "success", "warn", "info", "question", ...
+function Widgets.message(text, timeout, kind)
     UIManager:show(InfoMessage:new{
         text = brand(text),
         timeout = timeout or 3,
+        icon = ToastGlyphs.icon(kind),
     })
 end
 
--- Small, non-intrusive toast (falls back to an InfoMessage if unavailable).
--- Repeats of the same message within a couple of seconds are coalesced so
--- multiple events don't stack toasts.
+-- Non-intrusive toast (falls back to an InfoMessage if unavailable). Repeats of
+-- the same message within a couple of seconds are coalesced so multiple events
+-- don't stack toasts. `kind` (optional) adds a leading glyph (emoji/symbol).
 local last_notify_text, last_notify_at
-function Widgets.notify(text, timeout)
+function Widgets.notify(text, timeout, kind)
     -- Toasts stay quiet and unbranded: just the book/action detail.
-    local branded = tostring(text or "")
-    if branded == "" then return end
+    local body = tostring(text or "")
+    if body == "" then return end
+    local glyph = ToastGlyphs.forKind(kind or "default")
+    local display = (glyph ~= "" and (glyph .. " " .. body)) or body
     local now = os.time()
-    if branded == last_notify_text and last_notify_at and now - last_notify_at < 2 then
+    if display == last_notify_text and last_notify_at and now - last_notify_at < 2 then
         return
     end
-    last_notify_text, last_notify_at = branded, now
+    last_notify_text, last_notify_at = display, now
+    -- Preferred: our wide, fixed-width toast. Falls back to the stock
+    -- Notification, then to an InfoMessage, so a broken helper can't stop
+    -- notifications entirely.
+    local ok_toast, Toast = pcall(require, "goodreadskosync.ui.toast")
+    if ok_toast and Toast then
+        UIManager:show(Toast:new{
+            text = display,
+            timeout = timeout or 3,
+            face = Font:getFace("infofont"),
+        })
+        return
+    end
     local ok, Notification = pcall(require, "ui/widget/notification")
     if ok and Notification then
         UIManager:show(Notification:new{
-            text = branded,
+            text = display,
             timeout = timeout or 3,
-            margin = Size.margin.small,
-            padding = Size.padding.small,
+            face = Font:getFace("infofont"),
+            margin = Size.margin.default,
+            padding = Size.padding.default,
         })
     else
         UIManager:show(InfoMessage:new{
-            text = branded,
+            text = display,
             timeout = timeout or 3,
+            icon = ToastGlyphs.icon(kind),
         })
     end
+end
+
+-- A larger, prominent message for high-value events. Uses one of KOReader's
+-- built-in icons (not an emoji) and lingers a little longer than a toast.
+-- opts = { kind, icon, timeout, width, height, alignment, show_icon }
+function Widgets.banner(text, opts)
+    opts = opts or {}
+    local msg = InfoMessage:new{
+        text = brand(text),
+        icon = opts.icon or ToastGlyphs.icon(opts.kind),
+        show_icon = opts.show_icon ~= false,
+        timeout = opts.timeout or 5,
+        width = opts.width,
+        height = opts.height,
+        alignment = opts.alignment or "left",
+    }
+    UIManager:show(msg)
+    return msg
+end
+
+-- "emoji" | "symbols" | "none" (see goodreadskosync.toast_glyphs).
+function Widgets.setGlyphStyle(style)
+    return ToastGlyphs.setStyle(style)
 end
 
 function Widgets.confirm(text, on_ok, ok_text)

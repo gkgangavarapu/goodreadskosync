@@ -502,18 +502,14 @@ function Util.countKeys(t)
     return n
 end
 
--- Short book label for toasts: only the first two words, then an ellipsis.
+-- Book label for toasts. Returns the FULL title (whitespace collapsed) so wide
+-- toasts show the whole name; the wide toast wraps it as needed. (The name is
+-- kept for compatibility; it used to abbreviate to the first two words.)
 function Util.shortTitle(title)
     if type(title) ~= "string" or title == "" then return nil end
-    local words, count = {}, 0
-    for w in title:gmatch("%S+") do
-        count = count + 1
-        if count <= 2 then words[#words + 1] = w end
-    end
-    if count == 0 then return nil end
-    local out = table.concat(words, " ")
-    if count > 2 then out = out .. "…" end
-    return out
+    local collapsed = Util.collapseWhitespace(title)
+    if collapsed == "" then return nil end
+    return collapsed
 end
 
 return Util

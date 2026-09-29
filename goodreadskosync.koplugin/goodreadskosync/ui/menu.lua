@@ -161,9 +161,16 @@ function Menu:buildMenu()
             callback = function() self:testConnection() end,
         },
         {
-            -- Tapping the version checks GitHub for a newer release.
+            -- Tapping the version checks GitHub for a newer release; when one is
+            -- known the label tells the user to tap to update.
             text_func = function()
-                return string.format(_("Version: %s"), Constants.VERSION)
+                local available = self:getSetting("update_available_version")
+                if available and available ~= "" then
+                    return string.format(
+                        _("Update available: %s · tap to update"), available)
+                end
+                return string.format(
+                    _("Version: %s · tap to check for updates"), Constants.VERSION)
             end,
             callback = function() self:checkForUpdates(true) end,
         },

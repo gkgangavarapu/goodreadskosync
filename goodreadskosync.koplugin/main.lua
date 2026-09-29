@@ -61,6 +61,8 @@ local DEFAULT_SETTINGS = {
     logging = false,
     -- Occasional, low-key "support the project" toast after a successful sync.
     support_tips = true,
+    -- Toast decoration: "symbols" | "none".
+    toast_glyphs = "symbols",
 }
 
 local Goodreads = WidgetContainer:extend{
@@ -76,6 +78,7 @@ function Goodreads:init()
     self.settings_store = Storage.open(Constants.STORAGE.SETTINGS)
     self.book_store = Storage.open(Constants.STORAGE.BOOK_SETTINGS)
     Logging.setEnabled(self:getSetting("logging") == true)
+    Widgets.setGlyphStyle(self:getSetting("toast_glyphs"))
     self._provider = nil
     self._pending_online = {}
     self._sync_busy = false
@@ -330,7 +333,7 @@ end
 -- list instead of auto-linking.
 function Goodreads:_handleResolution(result, identity, metadata, filename, choose)
     if not result then
-        Widgets.notify(_("Search failed · try again"))
+        Widgets.notify(_("Search failed · try again"), 3, "warn")
         return
     end
 
@@ -350,7 +353,7 @@ function Goodreads:_handleResolution(result, identity, metadata, filename, choos
     if result.status == "auto" then
         self:linkCandidate(result, result.selected)
     elseif result.status == "mapped" then
-        Widgets.notify(_("Already linked"))
+        Widgets.notify(_("Already linked"), 3, "book")
     elseif (result.status == "confirm" or result.status == "manual")
         and has_candidates then
         if self:getSetting("auto_link") then
@@ -361,7 +364,7 @@ function Goodreads:_handleResolution(result, identity, metadata, filename, choos
             end, function() self:promptFindBook() end)
         end
     elseif result.status == "error" then
-        Widgets.notify(_("No network · will retry"))
+        Widgets.notify(_("No network · will retry"), 3, "warn")
     else
         -- Nothing was found (or no confident match): offer to link it manually,
         -- with a short instruction and an input, unless the user snoozed it.
@@ -383,7 +386,7 @@ function Goodreads:snoozeIdentify(identity)
     if identity and identity.local_key then
         self:setBookSetting(identity.local_key, "identify_snooze_until", os.time() + 60 * 60)
     end
-    Widgets.notify(_("Will ask again in an hour"), 3)
+    Widgets.notify(_("Will ask again in an hour"), 3, "clock")
 end
 
 -- Link a chosen candidate and notify quietly.
@@ -397,7 +400,7 @@ function Goodreads:linkCandidate(result, candidate)
     local linked_title = shortTitle(candidate.title)
     Widgets.notify(linked_title
         and string.format(_("%s · Linked"), linked_title)
-        or _("Linked to Goodreads"))
+        or _("Linked to Goodreads"), 3, "link")
     -- Newly linked book: sync at once so it appears on Goodreads right away.
     -- When enabled, also start it as Currently Reading for an immediate effect.
     self:syncSilently({
@@ -461,7 +464,7 @@ end
 function Goodreads:rateCurrentBook()
     local mapping = self:currentMapping()
     if not mapping or not mapping.goodreads_id then
-        Widgets.notify(_("Not linked yet"))
+        Widgets.notify(_("Not linked yet"), 3, "warn")
         return
     end
     Widgets.starDialog(_("Rate this book on Goodreads"), function(stars)
@@ -482,11 +485,11 @@ function Goodreads:submitRating(stars)
         if ok then
             Widgets.notify(t
                 and string.format(_("%s · Rated %d stars"), t, stars)
-                or string.format(_("Rated %d stars"), stars))
+                or string.format(_("Rated %d stars"), stars), 3, "star")
         else
             Widgets.notify(t
                 and string.format(_("%s · Rating failed"), t)
-                or _("Rating failed"))
+                or _("Rating failed"), 3, "warn")
         end
     end)
 end
@@ -525,7 +528,7 @@ end
 function Goodreads:maybeOnboard()
     if self:getSetting("onboarded") then return end
     self:setSetting("onboarded", true)
-    Widgets.notify(_("Ready · sign in from Menu → More → Account"), 6)
+    Widgets.notify(_("Ready · sign in from Menu → More → Account"), 6, "success")
 end
 
 -- After a book is finished, mention rating once per book (toast only).
@@ -1118,9 +1121,14 @@ function Goodreads:checkForUpdates(manual)
             end
             self:setSetting("update_last_check", os.time())
             if not Update.is_newer(info.version, Constants.VERSION) then
-                if manual then Widgets.notify(_("You're up to date.")) end
+                -- Clear any previously known update so the menu label is honest.
+                self:setSetting("update_available_version", nil)
+                if manual then Widgets.notify(_("You're up to date."), 3, "success") end
                 return
             end
+            -- Remember the available version so the Version menu item can tell
+            -- the user to tap it, even between checks.
+            self:setSetting("update_available_version", info.version)
             local msg = string.format(_("Goodreads KO Sync %s is available."), info.version)
             local notes = self:formatReleaseNotes(info.notes)
             if notes then msg = msg .. "\n\n" .. notes end
@@ -1149,6 +1157,7 @@ function Goodreads:installUpdate(info)
             end)
         if completed == false then return end
         if ok then
+            self:setSetting("update_available_version", nil)
             UIManager:askForRestart(_("Goodreads KO Sync updated. Restart KOReader to apply."))
         else
             Widgets.message(string.format(_("Update failed: %s"), tostring(err)), 6)

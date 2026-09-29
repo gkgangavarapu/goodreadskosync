@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.2] - 2026-09-29
+
+Notifications are much easier to read, and updating is clearer.
+
+**Notifications**
+- Toasts are now wider, fixed-width cards instead of tiny boxes.
+- Book names are shown in **full** (they used to be shortened to the first two words).
+- A small monochrome symbol marks each notification (✓ ★ • …); choose **More → Settings → Toast symbols → Off** for plain text.
+- Important results (a manual sync) now appear as a larger banner with a KOReader icon.
+
+**Updates**
+- The Version item now reads "Version: x.y.z · tap to check for updates", and changes to "Update available: x.y.z · tap to update" once a newer release is known.
+- GitHub release pages now show this changelog text (instead of a bare "Full Changelog" line).
+- Fixed: clearing a saved value (e.g. turning off "Remember password") now persists on device.
+
 ## [1.17.0] - 2026-09-29
 
 Reliability fixes, and your Goodreads password is now saved by default so you don't have to sign in again.
