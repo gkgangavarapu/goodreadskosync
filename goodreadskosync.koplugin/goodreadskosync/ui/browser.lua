@@ -14,10 +14,12 @@ Mixed into the plugin as methods (`self` is the plugin instance).
 @module koplugin.goodreads.ui.browser
 --]]
 
+local Images = require("goodreadskosync.browse.images")
 local Logging = require("goodreadskosync.logging")
 local Render = require("goodreadskosync.browse.render")
 local Session = require("goodreadskosync.auth.session")
 local Storage = require("goodreadskosync.storage")
+local Util = require("goodreadskosync.util")
 local Widgets = require("goodreadskosync.ui.widgets")
 local _ = require("gettext")
 
@@ -85,6 +87,54 @@ function Browser:_browseFetch(url)
     end
     Logging.trace("browse: loaded url=", tostring(url), " bytes=", tostring(#resp.body))
     return resp.body
+end
+
+-- Keep the on-disk image cache bounded (delete oldest beyond `keep`).
+function Browser:_browsePruneImages(dir, keep)
+    local ok, lfs = pcall(require, "libs/libkoreader-lfs")
+    if not ok or not lfs then return end
+    local files = {}
+    for entry in lfs.dir(dir) do
+        if entry ~= "." and entry ~= ".." then
+            local path = dir .. "/" .. entry
+            local attr = lfs.attributes(path)
+            if attr and attr.mode == "file" then
+                files[#files + 1] = { path = path, t = attr.modification or 0 }
+            end
+        end
+    end
+    if #files <= keep then return end
+    table.sort(files, function(a, b) return a.t < b.t end)
+    for i = 1, #files - keep do os.remove(files[i].path) end
+end
+
+-- Download the page's images (best effort) and point the HTML at local files,
+-- because CRE cannot fetch remote images. Returns the rewritten HTML.
+function Browser:_browseDownloadImages(html, base)
+    local urls = Images.collect(html, base)
+    if #urls == 0 then return html end
+    local dir = Storage.getBaseDir() .. "/browse-img"
+    pcall(function() require("ffi/util").makePath(dir) end)
+    local http = Session.to_http(Session.load())
+    local map = {}
+    for i = 1, math.min(#urls, 8) do
+        local u = urls[i]
+        local name = Util.sha256Hex(u):sub(1, 20) .. "." .. Images.extension(u)
+        local file = dir .. "/" .. name
+        local existing = io.open(file, "r")
+        if existing then
+            existing:close()
+        else
+            local resp = http:get(u, { follow = true, detect_auth = false })
+            if resp and resp.body and #resp.body > 0 and #resp.body <= 2000000 then
+                local f = io.open(file, "wb")
+                if f then f:write(resp.body); f:close() end
+            end
+        end
+        map[u] = "browse-img/" .. name
+    end
+    self:_browsePruneImages(dir, 60)
+    return Images.rewrite(html, map)
 end
 
 -- Best-effort: fetch the page's own CSS so CRE styles it like the site.
@@ -164,6 +214,7 @@ function Browser:_browseLoad(url, mode)
                 local body, err = self:_browseFetch(url)
                 if not body then return false, (err or "fetch") end
                 local css = self:_browseCollectCss(body, url)
+                body = self:_browseDownloadImages(body, url)
                 local doc = Render.page(body, url,
                     { back = back, reload = url, home = HOME }, css)
                 local file = Storage.getBaseDir() .. "/browse-" .. tostring(slot) .. ".html"

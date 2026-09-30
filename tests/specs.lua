@@ -20,6 +20,7 @@ return {
     "specs.toast_glyphs_spec",
     "specs.parse_spec",
     "specs.render_spec",
+    "specs.images_spec",
     "specs.goodreads_web_spec",
     "specs.update_spec",
     "specs.support_qr_spec",

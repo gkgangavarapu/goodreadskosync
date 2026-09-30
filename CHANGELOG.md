@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-09-30
+
+Browse Goodreads now shows images, plus groundwork for swappable browser engines.
+
+- Covers and images are downloaded with your session, shown in the page (grayscale on e-ink), cached on device and pruned automatically.
+- New browser-engine contract (`BrowserEngine`) and a MockEngine, so a NetSurf or WebKit-class engine can be added behind one interface without touching the UI.
+
 ## [1.18.5] - 2026-09-30
 
 Browse Goodreads now uses the page's own CSS, so pages look much more like the site.
