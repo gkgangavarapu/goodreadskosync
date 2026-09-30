@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-10-01
+- **Selectable update channel.** Settings, and the main-menu version label, now honour an **Update channel** preference: **Stable** (published releases) or **Dev** (prereleases from the dev branch). The default matches the channel the running build was published on; switching channels changes where "check for updates" (and the daily auto-check) fetches from.
+- Both channels are now published: `v1.26.0` (stable) and `v1.26.0-dev` (dev prerelease).
+
 ## [1.25.1] - 2026-10-01
 - Clear the stale `last_sync_error` after a successful sync. It was only ever set on failure, so an old network error lingered in the diagnostics page even after later successful syncs. Now a successful sync clears it (and the diagnostics page treats an empty value as "none").
 

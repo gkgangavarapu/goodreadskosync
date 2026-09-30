@@ -55,6 +55,9 @@ local DEFAULT_SETTINGS = {
     auto_link = false,
     update_progress_after_finished = false,
     auto_update_check = true,
+    -- Where updates come from: "stable" (published releases) or "dev"
+    -- (prereleases). Defaults to the channel this build was published on.
+    update_channel = Constants.CHANNEL,
     conflict_policy = Constants.CONFLICT_POLICY.PREFER_LOCAL,
     completion_behavior = Constants.COMPLETION_BEHAVIOR.EXPLICIT_ONLY,
     sync_preset = "medium",
@@ -115,6 +118,17 @@ function Goodreads:setSetting(key, value)
     self.settings_store:set(key, value)
     self.settings_store:flush()
     if key == "sync_interval" then self:scheduleTimer() end
+end
+
+-- Which update channel to follow: "stable" (published releases) or "dev"
+-- (prereleases from the dev branch). Defaults to the channel this build was
+-- published on; the user can switch it in Settings.
+function Goodreads:updateChannel()
+    local channel = self:getSetting("update_channel")
+    if channel ~= "dev" and channel ~= "stable" then
+        channel = Constants.CHANNEL
+    end
+    return channel
 end
 
 -- Apply a sync preset: it writes every setting the preset controls, so a
@@ -1236,7 +1250,7 @@ function Goodreads:checkForUpdates(manual)
             local completed, info, err = self:runInBackground(
                 manual and _("Checking for updates…") or nil,
                 function()
-                    local ok, a, b = pcall(Update.check)
+                    local ok, a, b = pcall(Update.check, { channel = self:updateChannel() })
                     if not ok then return nil, tostring(a) end
                     return a, b
                 end)

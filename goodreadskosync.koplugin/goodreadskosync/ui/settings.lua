@@ -128,6 +128,33 @@ Prominent banners always use KOReader's built-in icons.]]),
             callback = toggle("auto_update_check"),
         },
         {
+            text = _("Update channel"),
+            help_text = _([[
+Choose where updates come from:
+• Stable: published releases only (recommended).
+• Dev: prereleases from the dev branch — newer, less tested.]]),
+            sub_item_table = {
+                {
+                    text = _("Stable"),
+                    radio = true,
+                    checked_func = function() return plugin:updateChannel() == "stable" end,
+                    callback = function()
+                        plugin:setSetting("update_channel", "stable")
+                        Widgets.notify(_("Update channel: Stable"))
+                    end,
+                },
+                {
+                    text = _("Dev"),
+                    radio = true,
+                    checked_func = function() return plugin:updateChannel() == "dev" end,
+                    callback = function()
+                        plugin:setSetting("update_channel", "dev")
+                        Widgets.notify(_("Update channel: Dev"))
+                    end,
+                },
+            },
+        },
+        {
             text = _("Diagnostic logging (support)"),
             help_text = _("Write detailed sync logs to the plugin's login.log for troubleshooting. Off by default."),
             checked_func = checked("logging"),

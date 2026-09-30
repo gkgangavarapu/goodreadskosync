@@ -174,7 +174,8 @@ function Menu:buildMenu()
                         _("Update available: %s · tap to update"), available)
                 end
                 local label = Constants.VERSION
-                local channel = Constants.CHANNEL
+                local channel = self.updateChannel and self:updateChannel()
+                    or Constants.CHANNEL
                 if channel and channel ~= "" and channel ~= "stable" then
                     label = label .. " (" .. channel .. ")"
                 end

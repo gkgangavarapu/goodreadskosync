@@ -22,6 +22,13 @@ local API_URL = "https://api.github.com/repos/" .. REPO .. "/releases/latest"
 local PAGE_URL = "https://github.com/" .. REPO .. "/releases/latest"
 local PLUGIN_FOLDER = "goodreadskosync.koplugin"
 
+-- Update channels: "dev" follows prereleases (the dev branch); anything else
+-- is treated as "stable" (published releases only).
+function Update.normalize_channel(channel)
+    if channel == "dev" then return "dev" end
+    return "stable"
+end
+
 local function koreader_util()
     local ok, util = pcall(require, "util")
     return ok and util or nil
@@ -97,7 +104,7 @@ end
 --   dev    -> the newest release of any kind (dev branch publishes prereleases)
 function Update.check(opts)
     opts = opts or {}
-    local channel = opts.channel or Constants.CHANNEL or "stable"
+    local channel = Update.normalize_channel(opts.channel or Constants.CHANNEL)
     local Http = require("goodreadskosync.goodreads.http")
     local http = Http:new{
         base_url = "https://api.github.com",
