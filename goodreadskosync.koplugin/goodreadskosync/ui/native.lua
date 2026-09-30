@@ -108,6 +108,32 @@ local function hline()
 end
 
 --------------------------------------------------------------------------------
+-- Generic disk cache for data reused across screens (manual-refresh model).
+-- Names: "book_cache", "reviews_cache", "author_cache". Keys are strings.
+--------------------------------------------------------------------------------
+local function cache_store(name)
+    local ok, Storage = pcall(require, "goodreadskosync.storage")
+    if not ok or not Storage then return nil end
+    return Storage.open(name)
+end
+
+local function cache_get(name, key)
+    local s = cache_store(name)
+    if not s then return nil end
+    local ok, v = pcall(function() return s:get(key, nil) end)
+    return ok and v or nil
+end
+
+local function cache_set(name, key, value)
+    local s = cache_store(name)
+    if not s then return end
+    pcall(function()
+        s:set(key, value)
+        s:flush()
+    end)
+end
+
+--------------------------------------------------------------------------------
 -- Cover thumbnails (aspect preserved, bounded BlitBuffer cache)
 --------------------------------------------------------------------------------
 
@@ -176,32 +202,46 @@ function Native._fetchCovers(items)
     return out
 end
 
-function Native._loadBook(plugin, book)
+function Native._cachedBook(id)
+    local saved = cache_get("book_cache", tostring(id))
+    if type(saved) ~= "table" then return nil end
+    if saved.cover_url then saved.cover_file = Covers.cached(saved.cover_url) end
+    return saved
+end
+
+function Native._loadBook(plugin, book, force)
+    local id = tostring(book and book.goodreads_id or "")
+    if id == "" then return nil end
+    if not force then
+        local saved = Native._cachedBook(id)
+        if saved then return saved end
+    end
     local provider = plugin:getProvider()
     if not provider then return nil end
-    local info = select(1, provider:get_book(book.goodreads_id)) or {}
-    info.goodreads_id = info.goodreads_id or book.goodreads_id
+    local info = select(1, provider:get_book(id)) or {}
+    info.goodreads_id = info.goodreads_id or id
     info.title = info.title or book.title
     info.author = book.author
         or (type(info.authors) == "table" and info.authors[1])
         or info.author
     info.rating = info.rating or book.avg_rating
     if provider.get_book_shelves then
-        local meta = select(1, provider:get_book_shelves(book.goodreads_id))
+        local meta = select(1, provider:get_book_shelves(id))
         if type(meta) == "table" then
             info.slug = meta.slug
             info.my_shelf = meta.shelf
             info.my_rating = meta.rating
         end
     end
-    if provider.get_reviews then
-        local rev = select(1, provider:get_reviews(book.goodreads_id, 1))
-        if type(rev) == "table" then info.reviews = rev end
-    end
     info.description = plain_text(info.description)
+    -- Reviews preview only if already cached (they are fetched by the Reviews
+    -- screen), so opening a book doesn't add a network request.
+    local rv = cache_get("reviews_cache", id .. ":1")
+    if type(rv) == "table" then info.reviews = rv.reviews end
     if info.cover_url then
         info.cover_file = Covers.fetch(info.cover_url)
     end
+    cache_set("book_cache", id, info)
     return info
 end
 
@@ -254,19 +294,45 @@ function Native._searchAuthors(plugin, query)
     return type(authors) == "table" and authors or nil
 end
 
-function Native._loadAuthorBooks(plugin, author_id)
+function Native._cachedAuthor(author_id)
+    local saved = cache_get("author_cache", tostring(author_id))
+    if type(saved) ~= "table" then return nil end
+    for i = 1, math.min(#saved, 30) do
+        local b = saved[i]
+        if b.cover_url then b.cover_file = Covers.cached(b.cover_url) end
+    end
+    return saved
+end
+
+function Native._loadAuthorBooks(plugin, author_id, force)
+    local key = tostring(author_id or "")
+    if key == "" then return nil end
+    if not force then
+        local saved = Native._cachedAuthor(key)
+        if saved then return saved end
+    end
     local provider = plugin:getProvider()
     if not provider or not provider.get_author_books then return nil end
-    local books = select(1, provider:get_author_books(author_id))
+    local books = select(1, provider:get_author_books(key))
     if type(books) ~= "table" then return nil end
     for i = 1, math.min(#books, 30) do
         local b = books[i]
         if b.cover_url then b.cover_file = Covers.cached(b.cover_url) end
     end
+    cache_set("author_cache", key, books)
     return books
 end
 
-function Native._loadReviews(plugin, book_id, page)
+function Native._cachedReviews(book_id, page)
+    return cache_get("reviews_cache", tostring(book_id) .. ":" .. tostring(page or 1))
+end
+
+function Native._loadReviews(plugin, book_id, page, force)
+    local key = tostring(book_id) .. ":" .. tostring(page or 1)
+    if not force then
+        local saved = Native._cachedReviews(book_id, page)
+        if type(saved) == "table" then return saved end
+    end
     local provider = plugin:getProvider()
     if not provider or not provider.get_reviews then return nil end
     local reviews, has_more = provider:get_reviews(book_id, page)
@@ -274,7 +340,9 @@ function Native._loadReviews(plugin, book_id, page)
         Logging.diag("native: reviews provider nil book=", tostring(book_id))
         return nil
     end
-    return { reviews = reviews, has_more = has_more and true or false }
+    local out = { reviews = reviews, has_more = has_more and true or false }
+    cache_set("reviews_cache", key, out)
+    return out
 end
 
 --------------------------------------------------------------------------------
@@ -1380,27 +1448,35 @@ function MainScreen:_fetchRecommendations(page)
     end)
 end
 
-function MainScreen:openAuthor(author_id, name)
+function MainScreen:openAuthor(author_id, name, force)
     if not author_id then return end
-    self.stack[#self.stack + 1] = {
+    local view = {
         kind = "author",
         author_id = author_id,
         author_name = name,
         loading = true,
         page = 1,
     }
+    self.stack[#self.stack + 1] = view
+    if not force then
+        local cached = Native._cachedAuthor(author_id)
+        if cached then
+            view.books = cached
+            view.loading = false
+        end
+    end
     self:_render()
-    self:_fetchAuthor(author_id)
+    if view.loading then self:_fetchAuthor(author_id, force) end
 end
 
-function MainScreen:_fetchAuthor(author_id)
+function MainScreen:_fetchAuthor(author_id, force)
     self._token = self._token + 1
     local token = self._token
     local plugin = self.plugin
     plugin:runWhenOnline(function()
         plugin:runAsync(function()
             local completed, books = plugin:runInBackground(_("Loading author…"), function()
-                return Native._loadAuthorBooks(plugin, author_id)
+                return Native._loadAuthorBooks(plugin, author_id, force)
             end)
             if not self._alive or token ~= self._token then return end
             local v = self.stack[#self.stack]
@@ -1651,18 +1727,31 @@ function MainScreen:_fetchShelf(shelf)
     end)
 end
 
-function MainScreen:openBook(book)
+function MainScreen:openBook(book, force)
     if not book or not book.goodreads_id then return end
-    self.stack[#self.stack + 1] = { kind = "book", book = book, loading = true }
+    local view = { kind = "book", book = book, loading = true }
+    self.stack[#self.stack + 1] = view
+    if not force then
+        local cached = Native._cachedBook(book.goodreads_id)
+        if cached then
+            view.info = cached
+            view.loading = false
+        end
+    end
     self:_render()
+    if view.loading then
+        self:_fetchBook(book, force)
+    end
+end
 
+function MainScreen:_fetchBook(book, force)
     self._token = self._token + 1
     local token = self._token
     local plugin = self.plugin
     plugin:runWhenOnline(function()
         plugin:runAsync(function()
             local completed, info = plugin:runInBackground(_("Loading book…"), function()
-                return Native._loadBook(plugin, book)
+                return Native._loadBook(plugin, book, force)
             end)
             if not self._alive or token ~= self._token then return end
             local v = self.stack[#self.stack]
@@ -1695,12 +1784,22 @@ function MainScreen:openReviews(book)
     self:_fetchReviews(book, 1)
 end
 
-function MainScreen:_fetchReviews(book, page)
+function MainScreen:_fetchReviews(book, page, force)
     local v = self.stack[#self.stack]
     if v and v.kind == "reviews" and v.book == book then
         v.page = page
-        v.loading = true
         v.error = nil
+        if not force then
+            local cached = Native._cachedReviews(book.goodreads_id, page)
+            if type(cached) == "table" then
+                v.reviews = cached.reviews
+                v.has_more = cached.has_more
+                v.loading = false
+                self:_render()
+                return
+            end
+        end
+        v.loading = true
     end
     self:_render()
     self._token = self._token + 1
@@ -1709,7 +1808,7 @@ function MainScreen:_fetchReviews(book, page)
     plugin:runWhenOnline(function()
         plugin:runAsync(function()
             local completed, res = plugin:runInBackground(_("Loading reviews…"), function()
-                return Native._loadReviews(plugin, book.goodreads_id, page)
+                return Native._loadReviews(plugin, book.goodreads_id, page, force)
             end)
             if not self._alive or token ~= self._token then return end
             local cur = self.stack[#self.stack]
@@ -1736,6 +1835,17 @@ function MainScreen:_reviewsBody(view, body_h)
     local margin = self:_margins()
     local inner_w = screen_w - 2 * margin
     local content = VerticalGroup:new{ align = "center" }
+    local rf = FrameContainer:new{
+        width = screen_w, padding = sp(4), margin = 0, bordersize = 0,
+    }
+    rf[1] = Button:new{
+        text = _("\226\134\187  Refresh"),
+        width = inner_w,
+        bordersize = sp(1),
+        text_font_face = "smallinfofont",
+        callback = function() self:_fetchReviews(view.book, view.page or 1, true) end,
+    }
+    content[#content + 1] = rf
     for _i, r in ipairs(reviews) do
         local lines = VerticalGroup:new{ align = "left" }
         lines[#lines + 1] = TextWidget:new{
@@ -2011,6 +2121,18 @@ function MainScreen:_bookDetail(view, body_h)
         width = inner_w,
         bordersize = sp(1),
         callback = function() self:openReviews(book) end,
+    }
+    content[#content + 1] = VerticalSpan:new{ width = sp(10) }
+    content[#content + 1] = Button:new{
+        text = _("\226\134\187  Refresh"),
+        width = inner_w,
+        bordersize = sp(1),
+        callback = function()
+            view.loading = true
+            view.info = nil
+            self:_render()
+            self:_fetchBook(book, true)
+        end,
     }
     content[#content + 1] = VerticalSpan:new{ width = sp(20) }
 
