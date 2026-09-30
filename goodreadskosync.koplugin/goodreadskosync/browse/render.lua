@@ -31,10 +31,16 @@ local function absolutize(body, host)
     return body
 end
 
--- html, url, nav{ back, reload, home } -> full document string
-function Render.page(html, url, nav)
+-- html, url, nav{ back, reload, home }, extra_css -> full document string
+function Render.page(html, url, nav, extra_css)
     html = tostring(html or "")
     local host = (url and url:match("^(https?://[^/]+)")) or "https://www.goodreads.com"
+
+    -- Keep the page's own inline (critical) CSS so CRE can style it like the site.
+    local inline_css = {}
+    for css in html:gmatch("<style[^>]*>(.-)</style>") do
+        inline_css[#inline_css + 1] = css
+    end
 
     local body = html:match("<body[^>]*>(.-)</body>") or html
     body = body
@@ -69,8 +75,12 @@ function Render.page(html, url, nav)
     title = Util.decodeEntities(title):gsub("%s+", " ")
     title = title:gsub("^%s+", ""):gsub("%s+$", "")
 
+    local site_css = table.concat(inline_css, "\n") .. "\n" .. tostring(extra_css or "")
+    if #site_css > 400000 then site_css = site_css:sub(1, 400000) end
+
     return "<html><head><meta charset='utf-8'><title>" .. title ..
-        "</title><style>" .. STYLE .. "</style></head><body>" ..
+        "</title><style>" .. STYLE .. "</style>" ..
+        "<style>" .. site_css .. "</style></head><body>" ..
         navhtml .. body .. "</body></html>"
 end
 

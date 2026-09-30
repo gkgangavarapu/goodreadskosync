@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.5] - 2026-09-30
+
+Browse Goodreads now uses the page's own CSS, so pages look much more like the site.
+
+- The page's stylesheets are downloaded and inlined, and inline critical CSS is kept.
+- Site header, footer, nav and forms are still stripped for a cleaner read.
+- JavaScript still cannot run on-device, so JS-only widgets remain native actions.
+
 ## [1.18.4] - 2026-09-30
 
 Fixes the side effects of Browse Goodreads and cleans up the page view.

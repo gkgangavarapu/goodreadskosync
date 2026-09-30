@@ -41,6 +41,29 @@ local function remove_path(path)
     end
 end
 
+-- Absolute https URLs of the page's linked stylesheets.
+local function stylesheet_urls(html, base)
+    local urls, seen = {}, {}
+    local host = (base and base:match("^(https?://[^/]+)")) or "https://www.goodreads.com"
+    for tag in html:gmatch("<link[^>]*>") do
+        local rel = tag:match('rel="([^"]+)"') or tag:match("rel='([^']+)'")
+        local href = tag:match('href="([^"]+)"') or tag:match("href='([^']+)'")
+        if rel and href and rel:find("stylesheet") then
+            local abs = href
+            if abs:sub(1, 2) == "//" then
+                abs = "https:" .. abs
+            elseif abs:sub(1, 1) == "/" then
+                abs = host .. abs
+            end
+            if abs:match("^https://") and not seen[abs] then
+                seen[abs] = true
+                urls[#urls + 1] = abs
+            end
+        end
+    end
+    return urls
+end
+
 -- Fetch a page with the stored session. Returns body or nil, error.
 -- detect_auth is off: browsing reads arbitrary pages, and the sign-in sniffing
 -- used for write operations gives false positives on normal Goodreads pages.
@@ -62,6 +85,24 @@ function Browser:_browseFetch(url)
     end
     Logging.trace("browse: loaded url=", tostring(url), " bytes=", tostring(#resp.body))
     return resp.body
+end
+
+-- Best-effort: fetch the page's own CSS so CRE styles it like the site.
+function Browser:_browseCollectCss(html, base)
+    local urls = stylesheet_urls(html, base)
+    if #urls == 0 then return "" end
+    local session = Session.load()
+    local http = Session.to_http(session)
+    local parts, total = {}, 0
+    for i = 1, math.min(#urls, 2) do
+        local resp = http:get(urls[i], { follow = true, detect_auth = false })
+        if resp and resp.body and #resp.body > 0 then
+            parts[#parts + 1] = resp.body
+            total = total + #resp.body
+            if total > 300000 then break end
+        end
+    end
+    return table.concat(parts, "\n")
 end
 
 -- Register the "Open in Goodreads reader" button shown when a link is tapped,
@@ -122,7 +163,9 @@ function Browser:_browseLoad(url, mode)
             local completed, ok, extra = self:runInBackground(_("Loading Goodreads…"), function()
                 local body, err = self:_browseFetch(url)
                 if not body then return false, (err or "fetch") end
-                local doc = Render.page(body, url, { back = back, reload = url, home = HOME })
+                local css = self:_browseCollectCss(body, url)
+                local doc = Render.page(body, url,
+                    { back = back, reload = url, home = HOME }, css)
                 local file = Storage.getBaseDir() .. "/browse-" .. tostring(slot) .. ".html"
                 -- Fresh file and sidecar for this slot.
                 remove_path(file)

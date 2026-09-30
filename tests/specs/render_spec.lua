@@ -17,10 +17,11 @@ describe("browse.render", function()
         assert_true(doc:find("Martyr!", 1, true) ~= nil)
     end)
 
-    it("removes scripts and old styles", function()
+    it("removes scripts but keeps the page's inline CSS", function()
         local doc = Render.page(HTML, "https://www.goodreads.com/book/show/139400713")
         assert_nil(doc:find("evil()", 1, true))
-        assert_nil(doc:find("color:red", 1, true))
+        -- Inline (critical) CSS is now preserved so CRE styles it like the site.
+        assert_true(doc:find("color:red", 1, true) ~= nil)
     end)
 
     it("drops site chrome (header/footer/nav)", function()
@@ -31,6 +32,15 @@ describe("browse.render", function()
         assert_nil(doc:find("HDR", 1, true))
         assert_nil(doc:find("NAV", 1, true))
         assert_nil(doc:find("FTR", 1, true))
+    end)
+
+    it("keeps the page's inline CSS and adds fetched site CSS", function()
+        local html = [[<html><head><style>.site{color:#123}</style></head>]] ..
+            [[<body><p>Hi</p></body></html>]]
+        local doc = Render.page(html, "https://www.goodreads.com/", nil,
+            ".fetched{font-size:2em}")
+        assert_true(doc:find(".site{color:#123}", 1, true) ~= nil)
+        assert_true(doc:find(".fetched{font-size:2em}", 1, true) ~= nil)
     end)
 
     it("absolutizes relative links and adds a nav bar", function()
