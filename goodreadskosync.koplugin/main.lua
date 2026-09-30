@@ -1001,6 +1001,7 @@ function Goodreads:onReaderReady()
     diag("event: onReaderReady")
     if self.page_mapper then self.page_mapper:cachePageMap() end
     self:registerHighlight()
+    self:registerBrowseLinkHook()
     self:maybeCheckForUpdates()
 
     if not self:getSetting("sync_on_open") then return end

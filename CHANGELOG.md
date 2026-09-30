@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.1] - 2026-09-30
+
+"Browse Goodreads" now renders pages properly instead of showing plain text.
+
+- Pages open in KOReader's HTML engine, so headings, paragraphs, lists and links are formatted.
+- Tapping a link shows an **Open in Goodreads reader** option, so you keep browsing in place.
+- A small top bar offers **Back / Reload / Home**.
+- JavaScript-only screens and forms are still not rendered (writes use the plugin's own actions).
+
 ## [1.18.0] - 2026-09-30
 
 Adds a built-in Goodreads reader, so you can browse Goodreads on the device.
