@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.2] - 2026-09-30
+
+Fixes “Couldn’t load the page” when browsing Goodreads.
+
+- Normal Goodreads pages are no longer mistaken for a sign-in wall.
+- If loading still fails, the message now shows the reason (for example AUTH_REQUIRED), and it is written to the diagnostic log.
+
 ## [1.18.1] - 2026-09-30
 
 "Browse Goodreads" now renders pages properly instead of showing plain text.

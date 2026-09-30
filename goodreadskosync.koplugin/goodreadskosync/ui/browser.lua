@@ -14,6 +14,7 @@ Mixed into the plugin as methods (`self` is the plugin instance).
 @module koplugin.goodreads.ui.browser
 --]]
 
+local Logging = require("goodreadskosync.logging")
 local Render = require("goodreadskosync.browse.render")
 local Session = require("goodreadskosync.auth.session")
 local Storage = require("goodreadskosync.storage")
@@ -29,14 +30,25 @@ local function is_goodreads(url)
 end
 
 -- Fetch a page with the stored session. Returns body or nil, error.
+-- detect_auth is off: browsing reads arbitrary pages, and the sign-in sniffing
+-- used for write operations gives false positives on normal Goodreads pages.
 function Browser:_browseFetch(url)
     local session = Session.load()
-    if not Session.is_valid(session) then return nil, "auth" end
+    if not Session.is_valid(session) then return nil, "AUTH_REQUIRED" end
     local http = Session.to_http(session)
-    local resp = http:get(url, { follow = true, detect_auth = true })
+    local resp = http:get(url, { follow = true, detect_auth = false })
     Session.absorb(session, http)
     Session.save(session)
-    if resp.error then return nil, resp.error end
+    if resp.error then
+        Logging.trace("browse: fetch error=", tostring(resp.error),
+            " status=", tostring(resp.status), " url=", tostring(url))
+        return nil, tostring(resp.error)
+    end
+    if not resp.body or resp.body == "" then
+        Logging.trace("browse: empty body url=", tostring(url))
+        return nil, "empty"
+    end
+    Logging.trace("browse: loaded url=", tostring(url), " bytes=", tostring(#resp.body))
     return resp.body
 end
 
@@ -89,9 +101,9 @@ function Browser:_browseLoad(url, mode)
 
     self:runWhenOnline(function()
         self:runAsync(function()
-            local completed, ok, path = self:runInBackground(_("Loading Goodreads…"), function()
-                local body = self:_browseFetch(url)
-                if not body then return false, "fetch" end
+            local completed, ok, extra = self:runInBackground(_("Loading Goodreads…"), function()
+                local body, err = self:_browseFetch(url)
+                if not body then return false, (err or "fetch") end
                 local doc = Render.page(body, url, { back = back, reload = url, home = HOME })
                 local file = Storage.getBaseDir() .. "/browse-" .. tostring(os.time()) ..
                     "-" .. tostring(math.random(1000, 9999)) .. ".html"
@@ -102,10 +114,13 @@ function Browser:_browseLoad(url, mode)
                 return true, file
             end)
             if completed == false then return end
-            if not ok or not path then
-                Widgets.message(_("Couldn't load the page."), 5)
+            if not ok then
+                Widgets.message(string.format(_("Couldn't load the page (%s)."),
+                    tostring(extra or "?")), 6)
                 return
             end
+            local path = extra
+            Logging.trace("browse: rendering ", tostring(path))
             if self.ui and self.ui.showReader then
                 self.ui:showReader(path)
             elseif self.ui and self.ui.openFile then
