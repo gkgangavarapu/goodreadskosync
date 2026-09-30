@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-09-30
+
+Second local browser engine: NetSurf (opt-in, dev) plus its build kit.
+
+- New NetSurf engine adapter implementing the existing `BrowserEngine` contract (offscreen grayscale bitmap + hitmap); advertises `js=false`. It is never selected automatically — CRE stays the fallback.
+- `More → Browser engine (dev)` to choose CRE/NetSurf and see which engine is active (and why).
+- `engines/netsurf/`: offscreen render helper using an libnsfb **memory** surface (never `/dev/fb0`), writing `frame.pgm` + `frame.json`; dev Dockerfile, PW3 cross-build script and smoke test.
+- Unit tests 206 → 216.
+
 ## [1.19.0] - 2026-09-30
 
 Browse Goodreads now shows images, plus groundwork for swappable browser engines.

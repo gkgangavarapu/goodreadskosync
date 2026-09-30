@@ -63,6 +63,10 @@ local DEFAULT_SETTINGS = {
     support_tips = true,
     -- Toast decoration: "symbols" | "none".
     toast_glyphs = "symbols",
+    -- Browser engine: "cre" (default fallback) | "netsurf" (opt-in dev engine).
+    -- NetSurf is only used once its helper binary exists at browser_netsurf_bin.
+    browser_engine = "cre",
+    browser_netsurf_bin = "",
 }
 
 local Goodreads = WidgetContainer:extend{
@@ -247,6 +251,15 @@ end
 
 function Goodreads:hasDocument()
     return self.ui and self.ui.document ~= nil and not self:isBrowseDocument()
+end
+
+-- Which local browser engine to use. CRE is always available; NetSurf is
+-- opt-in and silently falls back to CRE when its helper binary is missing.
+-- Nothing switches engines automatically: the user picks it in Settings.
+function Goodreads:resolveBrowserEngine()
+    local Host = require("goodreadskosync.browser.host")
+    return Host.resolve(self:getSetting("browser_engine"),
+        self:getSetting("browser_netsurf_bin"))
 end
 
 function Goodreads:currentMetadata()

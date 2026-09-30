@@ -207,6 +207,44 @@ function Menu:buildMenu()
                         Widgets.message(_("Failed syncs cleared."))
                     end,
                 },
+                {
+                    text = _("Browser engine (dev)"),
+                    sub_item_table = {
+                        {
+                            text = _("CRE (default)"),
+                            radio = true,
+                            checked_func = function()
+                                return self:getSetting("browser_engine") ~= "netsurf"
+                            end,
+                            callback = function()
+                                self:setSetting("browser_engine", "cre")
+                            end,
+                        },
+                        {
+                            text = _("NetSurf (needs helper binary)"),
+                            radio = true,
+                            checked_func = function()
+                                return self:getSetting("browser_engine") == "netsurf"
+                            end,
+                            callback = function()
+                                self:setSetting("browser_engine", "netsurf")
+                            end,
+                        },
+                        {
+                            text_func = function()
+                                local engine, reason = self:resolveBrowserEngine()
+                                return string.format(_("Active engine: %s (%s)"),
+                                    tostring(engine), tostring(reason))
+                            end,
+                            callback = function()
+                                local engine, reason = self:resolveBrowserEngine()
+                                Widgets.message(string.format(
+                                    _("Engine: %s — %s"), tostring(engine),
+                                    tostring(reason)), 5)
+                            end,
+                        },
+                    },
+                },
             },
         },
         -- Kept at the bottom, out of the way.
