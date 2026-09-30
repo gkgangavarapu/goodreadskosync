@@ -1,70 +1,43 @@
 --[[--
-NetSurf browser engine adapter (second local engine).
+NetSurf browser engine adapter (a replaceable platform engine).
 
-NetSurf has no embeddable "library" entry point, so it is driven through the
-small native helper in `engines/netsurf/` (`netsurf_render`). The helper uses
-NetSurf's core with an libnsfb **memory** surface and never touches /dev/fb0.
-It writes an 8-bit PGM frame plus a JSON hitmap; this adapter runs it, reads
-those files, and exposes the standard BrowserEngine contract.
-
-The helper is optional: until it is built and present on the device, the host
-keeps using the CRE fallback engine.
+Drives the native `netsurf_render` helper (which links NetSurf's HTML/CSS/
+layout/image core and renders offscreen into a memory buffer). All OS access
+(processes, files, temp dir) goes through the injected `platform` object, so the
+engine itself is free of direct platform assumptions.
 
 Contract implemented (see koplugin.goodreads.browser.engine):
-  load() render() tap() scroll() back() forward() reload()
-  title() url() capabilities()
+    load() render() tap() scroll() back() forward() reload()
+    title() url() capabilities()
 
 @module koplugin.goodreads.browser.engines.netsurf
 --]]
 
+local Engine = require("goodreadskosync.browser.engine")
 local Json = require("goodreadskosync.goodreads.json")
 local Logging = require("goodreadskosync.logging")
+local Platform = require("goodreadskosync.browser.platform")
 
 local NetSurf = {}
 NetSurf.__index = NetSurf
 
 NetSurf.name = "netsurf"
 
--- Advertised capabilities. js is false until QuickJS (or similar) is added.
+-- Structured capability description (see Engine.DEFAULT_CAPABILITIES).
 local CAPS = {
-    js = false,
-    css = "2.1",
-    images = true,
-    links = true,
+    engine = "netsurf",
+    html = { level = 4 },
+    css = { level = "2.1", flex = false, grid = false },
+    js = { enabled = false, dom = false, engine = nil },
+    images = { raster = true, svg = false, formats = { "png", "jpeg", "gif", "bmp" } },
     forms = true,
     https = true,
+    cookies = true,
+    navigation = true,
+    scrolling = true,
+    hitmap = true,
+    text_select = false,
 }
-
--- Escape one argument for POSIX sh.
-local function shell_quote(s)
-    return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
-end
-
--- Default runner: run the helper, return ok, stdout, stderr, exit_code.
--- Overridable via `opts.runner` so the adapter is testable without the binary.
-local function default_runner(argv)
-    local parts = {}
-    for i = 1, #argv do parts[i] = shell_quote(argv[i]) end
-    local cmd = table.concat(parts, " ") .. " 2>&1"
-    Logging.trace("netsurf: exec ", cmd)
-    local handle = io.popen(cmd)
-    if not handle then return nil, "", "io.popen failed", -1 end
-    local out = handle:read("*a") or ""
-    local ok = handle:close()
-    -- Lua 5.1 returns true/nil; a numeric code is returned on some builds.
-    local code = 0
-    if ok == nil then code = 1 end
-    return true, out, "", code
-end
-
--- Read a whole file as a binary string.
-local function read_file(path)
-    local f = io.open(path, "rb")
-    if not f then return nil end
-    local data = f:read("*a")
-    f:close()
-    return data
-end
 
 -- Parse a binary PGM (P5) into width/height/pixels. Pure, unit-testable.
 function NetSurf.parse_pgm(data)
@@ -110,37 +83,8 @@ function NetSurf.hit_at(hits, x, y)
     return nil
 end
 
--- opts: bin, cookie_file, viewport = {w, h}, runner, tmp_dir
-function NetSurf.new(opts)
-    opts = opts or {}
-    local self = setmetatable({}, NetSurf)
-    self.bin = opts.bin or ""
-    self.cookie_file = opts.cookie_file or ""
-    self.runner = opts.runner or default_runner
-    self.tmp_dir = opts.tmp_dir or "/tmp"
-    self.viewport = {
-        w = tonumber(opts.viewport and opts.viewport.w) or 600,
-        h = tonumber(opts.viewport and opts.viewport.h) or 800,
-    }
-    self._url = "about:blank"
-    self._title = ""
-    self._history = {}
-    self._index = 0
-    self._scroll_y = 0
-    self._frame = nil
-    self._seq = 0
-    return self
-end
-
-function NetSurf:capabilities() return CAPS end
-
-function NetSurf:title() return self._title or "" end
-
-function NetSurf:url() return self._url or "about:blank" end
-
 -- Parse a "name=value; name2=value2" Cookie header into Netscape cookie-file
 -- lines that NetSurf's cookie jar understands. Pure, unit-testable.
--- tab-separated: domain, includeSubdomains, path, secure, expiry, name, value
 function NetSurf.netscape_cookie_lines(header, domain, expires)
     local lines = {}
     if type(header) ~= "string" or header == "" then return lines end
@@ -157,16 +101,43 @@ function NetSurf.netscape_cookie_lines(header, domain, expires)
     return lines
 end
 
+-- opts: bin, cookie_file, viewport = {w,h,dpi,scale}, platform, tmp_dir
+function NetSurf.new(opts)
+    opts = opts or {}
+    local self = setmetatable({}, NetSurf)
+    self.bin = opts.bin or ""
+    self.cookie_file = opts.cookie_file or ""
+    self.platform = opts.platform or Platform.new()
+    self.tmp_dir = opts.tmp_dir or self.platform:tmp_dir()
+    self.viewport = {
+        w = tonumber(opts.viewport and opts.viewport.w) or 600,
+        h = tonumber(opts.viewport and opts.viewport.h) or 800,
+        dpi = tonumber(opts.viewport and opts.viewport.dpi) or nil,
+        scale = tonumber(opts.viewport and opts.viewport.scale) or nil,
+    }
+    self._url = "about:blank"
+    self._title = ""
+    self._history = {}
+    self._index = 0
+    self._scroll_y = 0
+    self._frame = nil
+    self._seq = 0
+    return self
+end
+
+function NetSurf:capabilities() return Engine.normalize(CAPS) end
+
+function NetSurf:title() return self._title or "" end
+
+function NetSurf:url() return self._url or "about:blank" end
+
 -- Write the session cookies to the helper's Netscape cookie jar (best effort).
 function NetSurf:set_cookies(cookie_header, domain, expires)
     if not self.cookie_file or self.cookie_file == "" then return end
     local lines = NetSurf.netscape_cookie_lines(cookie_header, domain, expires)
     if #lines == 0 then return end
-    local f = io.open(self.cookie_file, "w")
-    if not f then return end
-    f:write("# Netscape HTTP Cookie File\n")
-    f:write(table.concat(lines, "\n"), "\n")
-    f:close()
+    local body = "# Netscape HTTP Cookie File\n" .. table.concat(lines, "\n") .. "\n"
+    self.platform:write(self.cookie_file, body)
 end
 
 -- Run the helper for `url` at the stored viewport/scroll. Returns true, or nil+err.
@@ -186,17 +157,17 @@ function NetSurf:_invoke(url, scroll_y)
         argv[#argv + 1] = "--cookies"
         argv[#argv + 1] = self.cookie_file
     end
-    local ok, out, err, code = self.runner(argv)
+    local ok, out, err, code = self.platform:run(argv)
     if not ok then return nil, err or "runner failed" end
     if code and code ~= 0 then
         Logging.trace("netsurf: helper failed code=", tostring(code), " out=", tostring(out))
         return nil, "helper exit " .. tostring(code)
     end
-    local meta_raw = read_file(prefix .. ".json")
-    local pgm_raw = read_file(prefix .. ".pgm")
+    local meta_raw = self.platform:read(prefix .. ".json")
+    local pgm_raw = self.platform:read(prefix .. ".pgm")
     if not meta_raw or not pgm_raw then return nil, "missing output files" end
-    os.remove(prefix .. ".json")
-    os.remove(prefix .. ".pgm")
+    self.platform:remove(prefix .. ".json")
+    self.platform:remove(prefix .. ".pgm")
     local meta = Json.decode(meta_raw)
     if type(meta) ~= "table" then return nil, "bad meta json" end
     local pgm = NetSurf.parse_pgm(pgm_raw)
@@ -216,26 +187,25 @@ end
 function NetSurf:load(url, cookies, viewport)
     if url and url ~= "" then self._url = url end
     if viewport then
-        self.viewport = {
-            w = tonumber(viewport.w) or self.viewport.w,
-            h = tonumber(viewport.h) or self.viewport.h,
-        }
+        self.viewport.w = tonumber(viewport.w) or self.viewport.w
+        self.viewport.h = tonumber(viewport.h) or self.viewport.h
+        if viewport.dpi then self.viewport.dpi = tonumber(viewport.dpi) end
+        if viewport.scale then self.viewport.scale = tonumber(viewport.scale) end
     end
     if cookies then self:set_cookies(cookies) end
     local ok, err = self:_invoke(self._url, 0)
     if not ok then return nil, err end
-    -- Record history only after a successful load.
     while #self._history > self._index do table.remove(self._history) end
     self._history[#self._history + 1] = self._url
     self._index = #self._history
     return true
 end
 
--- render() -> { bitmap, width, height, scroll_h, hits }
+-- render() -> { bitmap, width, height, scroll_y, scroll_h, hits }
 function NetSurf:render()
     local frame = self._frame
     if not frame then
-        return { bitmap = "", width = 0, height = 0, scroll_h = 0, hits = {} }
+        return { bitmap = "", width = 0, height = 0, scroll_y = 0, scroll_h = 0, hits = {} }
     end
     return {
         bitmap = frame.bitmap,

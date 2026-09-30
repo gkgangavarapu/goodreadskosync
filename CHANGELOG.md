@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-09-30
+
+Platform-independent browser architecture + multi-target build configs.
+
+- `BrowserEngine` methods are unchanged; `capabilities()` is now structured (html, css, js, images, forms, https, cookies, navigation, scrolling, hitmap, text_select) with `Engine.normalize` / `capability` / `meets`.
+- New platform abstraction `browser/platform.lua`: all process/filesystem/temp access lives there. The NetSurf adapter takes an injected platform, so engine code carries no platform assumptions.
+- Host selects engines by capability (`Host.choose`) and builds the viewport (`Host.viewport(w, h, {dpi, scale})`) so no engine hard-codes device dimensions. Added CRE + NetSurf capability descriptors.
+- Target-specific builds: `engines/netsurf/build-target.sh` + parameterized `build-pw3.sh` (CHOST/ARCH_CFLAGS/TARGET_NAME). PW3 is one target, not the global config.
+- `engines/README.md`: architecture diagram + platform/engine compatibility matrix (Kindle, Kobo, PocketBook, reMarkable, Android, Linux).
+- Goodreads sync (shelves/ratings/progress/notes) stays fully outside the browser.
+- Tests 219 → 227.
+
 ## [1.22.0] - 2026-09-30
 
 PW3 bring-up for the NetSurf engine (cross-compilation).

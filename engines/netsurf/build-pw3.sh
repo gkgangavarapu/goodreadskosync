@@ -4,9 +4,11 @@
 # Target (verified): PW3 => KOReader "kindlepw2" target =>
 #   armv7-a, Cortex-A9, NEON, EABI5, **soft-float ABI**, glibc <= 2.12.
 #
-# Toolchain: the KOReader KOXToolchain release for "kindlepw2"
+# Toolchain: a KOReader KOXToolchain release, e.g. "kindlepw2"
 #   https://github.com/koreader/koxtoolchain/releases  (asset: kindlepw2.tar.*)
 #   It bundles arm-kindlepw2-linux-gnueabi-{gcc,binutils,...} (GCC 14.2, glibc 2.12).
+# Other KOReader targets are driven by ./build-target.sh, which sets CHOST,
+# ARCH_CFLAGS and TARGET_NAME (this script stays target-agnostic).
 #
 # IMPORTANT: the toolchain's host binaries are glibc-dynamic x86_64 programs, so
 # this script must run on a glibc host (e.g. a Debian chroot). See pw3-toolchain.md.
@@ -15,32 +17,37 @@
 #   KOX_TC=/path/to/x-tools/arm-kindlepw2-linux-gnueabi ./build-pw3.sh
 #
 # Env:
-#   KOX_TC   (required) path to the extracted toolchain dir (contains bin/)
-#   WORK     (optional) build dir, default ~/.cache/netsurf-pw3
-#   JOBS     (optional) parallelism, default nproc
+#   KOX_TC        (required) path to the extracted toolchain dir (contains bin/)
+#   CHOST         (optional) target triplet, default arm-kindlepw2-linux-gnueabi
+#   ARCH_CFLAGS   (optional) arch flags, default softfp Cortex-A9 + NEON
+#   TARGET_NAME   (optional) output dir name, default pw3
+#   WORK          (optional) build dir, default ~/.cache/netsurf-<target>
+#   JOBS          (optional) parallelism, default nproc
 #
-# Output: out/pw3/netsurf_render (statically linked ARM executable)
+# Output: out/<TARGET_NAME>/netsurf_render (statically linked executable)
 set -eu
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-: "${KOX_TC:?set KOX_TC to the extracted kindlepw2 toolchain dir (contains bin/)}"
-[ -x "$KOX_TC/bin/arm-kindlepw2-linux-gnueabi-gcc" ] || {
-	echo "error: $KOX_TC/bin/arm-kindlepw2-linux-gnueabi-gcc not found" >&2
-	echo "       KOX_TC must point at x-tools/arm-kindlepw2-linux-gnueabi" >&2
+: "${KOX_TC:?set KOX_TC to the extracted toolchain dir (contains bin/)}"
+CHOST="${CHOST:-arm-kindlepw2-linux-gnueabi}"
+TARGET_NAME="${TARGET_NAME:-pw3}"
+[ -x "$KOX_TC/bin/$CHOST-gcc" ] || {
+	echo "error: $KOX_TC/bin/$CHOST-gcc not found" >&2
+	echo "       KOX_TC must point at a dir containing bin/$CHOST-gcc" >&2
 	exit 1
 }
 
-WORK="${WORK:-$HOME/.cache/netsurf-pw3}"
+WORK="${WORK:-$HOME/.cache/netsurf-$TARGET_NAME}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 SRC_VERSION=3.11
 TARBALL="netsurf-all-$SRC_VERSION.tar.gz"
 TARBALL_URL="http://download.netsurf-browser.org/netsurf/releases/source-full/$TARBALL"
 TREE="$WORK/netsurf-all-$SRC_VERSION"
 STAGE="$TREE/inst-monkey"
-OUT="$HERE/out/pw3"
+OUT="$HERE/out/$TARGET_NAME"
 TCBIN="$KOX_TC/bin"
-TC=arm-kindlepw2-linux-gnueabi
-ARCHFLAGS="-march=armv7-a -mtune=cortex-a9 -mfpu=neon -mfloat-abi=softfp -mthumb -O2"
+TC="$CHOST"
+ARCHFLAGS="${ARCH_CFLAGS:--march=armv7-a -mtune=cortex-a9 -mfpu=neon -mfloat-abi=softfp -mthumb -O2}"
 
 export PATH="$TCBIN:$PATH"
 
