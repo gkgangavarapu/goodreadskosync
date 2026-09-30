@@ -1,77 +1,56 @@
-# QEMU limitation for PW3 runtime validation
+# PW3 / runtime findings (supersedes the earlier "QEMU limitation" note)
 
-This documents why `qemu-user` is **not currently a valid proxy** for validating
-the PW3 NetSurf runtime, and what was observed. It isolates emulator limitations
-from genuine runtime bugs.
+## CORRECTION — this is a REAL bug, not a QEMU artifact
 
-## Environment
-
-- Toolchain: KOReader `kindlepw2` (armv7-a, Cortex-A9, NEON, EABI5, soft-float,
-  **glibc 2.12**, `ld-2.12.2.so`).
-- Emulators tried: Alpine `qemu-arm` and Debian `qemu-arm-static` (qemu 7.2.22).
-
-## Finding 1 — dynamic glibc 2.12 binaries don't run
-
-Any *dynamically linked* binary from the `kindlepw2` toolchain crashes
-immediately under qemu-user:
+The earlier conclusion ("qemu cannot faithfully reproduce the static binary's
+fetch failure") was **wrong**. Running the same static ARM helper on the
+**physical PW3** reproduces the failure exactly:
 
 ```
-$ qemu-arm-static -L <sysroot> ./hello        # dynamic ARM hello
-qemu: uncaught target signal 11 (Segmentation fault)
+# on the real Kindle (armv7l, Linux 3.0.35)
+$ ./netsurf_render --url data:text/html,<h1>hi</h1> --out /tmp/a
+rc=134
+json: {"url":"about:query/fetcherror","title":"FetchErrorTitle", ...}
+# stderr: *** glibc detected *** ./netsurf_render: double free or corruption (!prev): 0x0056c2c8 ***
 ```
 
-The same program built **static** runs fine (`hello from armv7`). The crash is in
-emulating the glibc 2.12 dynamic loader, not in the program. Consequence: only
-the **static** ARM helper can be exercised under qemu at all.
+So qemu was in fact a faithful proxy. The defect is in our ARM build/run.
 
-## Finding 2 — the static ARM helper runs, but NetSurf fetch fails uniformly
+## What we know (from the device)
 
-The static ARM `netsurf_render` executes and writes a well-formed
-`frame.pgm` + `frame.json`, but **every** request ends in NetSurf's
-`about:query/fetcherror`, including schemes that need no network at all:
+- The helper **executes** and writes a valid `frame.pgm` (480015 bytes) and
+  `frame.json` for the (error) page, then exits 134.
+- **Every** scheme fails to fetch: `about:blank`, `data:`, `file:`, `http:`,
+  `https:` all yield `about:query/fetcherror`. Non-network schemes failing rules
+  out DNS/TLS/CA/cookies/filesystem permissions.
+- The abort is a **heap corruption**: `double free or corruption (!prev)`.
+- `/proc/cpu/alignment` did not matter (setting it to fixup `2` did not help),
+  so unaligned access is **not** the cause.
+- With `MALLOC_CHECK_=0`, `data:` no longer aborts (exit 0) but *still* returns
+  `about:query/fetcherror` — so the fetch failure and the double free are
+  independent symptoms of an underlying memory/build problem.
 
-| URL | result |
-|---|---|
-| `about:blank` | fetch error |
-| `data:text/html,<h1>Hi</h1>` | fetch error |
-| `file:///…/t.html` (exists) | fetch error |
-| `http://127.0.0.1:18080/t.html` | fetch error |
-| `https://example.com/` | fetch error |
+## QEMU status
 
-The process also **aborts (SIGABRT, exit 134) after writing the output files**.
+- Dynamic `kindlepw2` (glibc 2.12) binaries still **cannot** be executed under
+  the available qemu-user (loader segfault) — that part stands.
+- The **static** ARM binary's behaviour under qemu matched the device, so qemu is
+  usable for iterating on this bug (faster than re-flashing).
 
-Because the failure is uniform across non-network schemes, this is not DNS,
-TLS, CA, cookies, curl configuration or filesystem permission — those would
-affect only some schemes. It points at the emulator/static-glibc combination.
+## Next: root-cause the ARM memory bug
 
-## Finding 3 — the identical frontend works natively
+Targeted steps (in order):
+1. Rebuild the ARM helper with NetSurf debug logging enabled to see whether the
+   fetchers register (`fetch_init`) and where the first bad free occurs.
+2. Add a `SIGABRT` backtrace (monkey already has a backtrace handler for
+   SIGSEGV/ILL/FPE/BUS) so the `double free` call stack can be symbolised.
+3. Bisect build flags most likely to differ from the working x86_64 build and to
+   be ARM-hostile: `-fsigned-char` (ARM `char` is unsigned by default),
+   `-fno-common`, `-mno-unaligned-access`, `-mfpu=vfpv3`/`-marm` (drop
+   NEON/Thumb), and `-O1`.
+4. Confirm with a local non-network case (`data:`, `file:`) before retesting
+   HTTPS.
 
-On x86_64 (native, no qemu) the same frontend and code path render
-`file://` (including a PNG), `data:`, `https://example.com/`, images and the
-Goodreads book page correctly, with a hitmap. So the frontend logic is sound;
-what fails is the ARM-under-qemu runtime.
-
-## Conclusion
-
-QEMU-user is **not a valid proxy for PW3 fetch/runtime validation** with this
-toolchain. The blocker requires **physical PW3 hardware** (or a qemu that can
-faithfully run glibc 2.12). A quick low-cost sanity check (a static x86_64
-control) is the only remaining cheap experiment; beyond that, device testing is
-the correct next step.
-
-## How this affected the implementation
-
-1. The engine now consumes a **complete** `frame.pgm` + `frame.json` even when
-   the helper exits non-zero (the post-output abort), recording `helper_exit` in
-   the frame. It still reports a failure when no usable output exists.
-2. `package-pw3.sh` produces a **self-contained** bundle (helper + resources +
-   CA bundle + launcher with deterministic paths) for device testing.
-3. The device smoke test is staged in the package `README.txt`.
-
-## Device validation plan
-
-Run the package's `run.sh` on the PW3 and record, per page (local HTML, local
-image, example.com, a CSS-heavy site, the Goodreads book page):
-exit status, title, URL, viewport, page height, hit count, render time, peak
-RSS, and whether `frame.pgm`/`frame.json` are valid. That is the only way to
-confirm real fetch behaviour.
+The helper's post-output abort is already tolerated by the engine (it consumes a
+complete `frame.pgm`/`frame.json` even on a non-zero exit), so once fetching /
+rendering is correct the integration will still work.

@@ -64,6 +64,8 @@ exec "$HERE/netsurf_render" --url "$URL" --width "$W" --height "$H" --out "$OUT"
 EOF
 chmod 755 "$PKG/run.sh"
 
+install -m 755 "$HERE/pw3-smoke-test.sh" "$PKG/smoke-test.sh"
+
 cat > "$PKG/README.txt" <<'EOF'
 NetSurf renderer — PW3 device test bundle
 =========================================
@@ -75,10 +77,14 @@ Contents
 Usage
   1. Copy this whole directory to the device, e.g.
        /mnt/us/koreader/goodreadskosync/netsurf/
-  2. Run:
+  2. One-command smoke test (writes report.txt + per-case frame.pgm/frame.json):
+       ./smoke-test.sh
+     Optional authenticated Goodreads case 11 (Netscape cookies file):
+       ./smoke-test.sh /path/to/cookies.netscape
+  3. Or render a single URL:
        ./run.sh https://example.com/ /tmp/ex
-     Writes /tmp/ex.pgm (P5 grayscale) and /tmp/ex.json (title/url/dims/hitmap).
-  3. Point the plugin's browser_netsurf_bin setting at <dir>/netsurf_render.
+  4. Point the plugin's browser_netsurf_bin setting at <dir>/netsurf_render.
+  5. Send back report.txt (and any case .json that failed).
 
 Notes
   - No JavaScript. Software-only; never touches /dev/fb0.

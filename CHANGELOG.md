@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### PW3 hardware findings (in progress)
+- Physical PW3 testing reproduces the static ARM helper's failure: every fetch
+  scheme returns `about:query/fetcherror` and the process aborts with
+  `double free or corruption`. This is a **real ARM build/run bug**, not a qemu
+  artifact (the earlier note was corrected). Root-cause in progress.
+
 ## [1.25.0] - 2026-10-01
 
 PW3 packaging + helper robustness; QEMU limitation documented.
