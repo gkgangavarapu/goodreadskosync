@@ -8,7 +8,7 @@ the resolver and sync engine remain usable from unit tests without KOReader.
 --]]
 
 local Constants = {
-    VERSION = "1.17.3",
+    VERSION = "1.17.4",
 
     -- Storage schema version. Bump only alongside a migration function.
     SCHEMA_VERSION = 1,
@@ -84,6 +84,10 @@ local Constants = {
     -- On document close, only flush when at most this many items are pending;
     -- a longer queue is drained later so closing never waits on the network.
     QUEUE_CLOSE_FLUSH_MAX = 2,
+
+    -- "Sync now" with no book open pushes linked books in small batches; the
+    -- rest continue on the next pass so it is never one long network burst.
+    SYNC_PENDING_MAX = 3,
 
     -- Conflict policies for cloud-vs-local progress.
     CONFLICT_POLICY = {

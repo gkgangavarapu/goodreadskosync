@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.4] - 2026-09-30
+
+Every change is now saved on the device first and posted in the background, and the last long network burst is gone.
+
+- Ratings, shelf changes, and the reading goal are queued locally first and sync in the background — the same way notes already did.
+- "Sync now" with no book open pushes linked books in small batches instead of all at once.
+- Nothing is lost: anything queued goes out on the next pass or when you're back online.
+
 ## [1.17.3] - 2026-09-30
 
 Fixes a hang that could freeze KOReader when several queued changes — especially notes — tried to sync at once.

@@ -8,6 +8,7 @@ Mixed into the plugin as methods (`self` is the plugin instance).
 
 local ButtonDialog = require("ui/widget/buttondialog")
 local InfoMessage = require("ui/widget/infomessage")
+local Queue = require("goodreadskosync.sync.queue")
 local Reading = require("goodreadskosync.reading")
 local UIManager = require("ui/uimanager")
 local Widgets = require("goodreadskosync.ui.widgets")
@@ -125,24 +126,14 @@ function ReadingUI:setReadingGoal(goal)
         Widgets.message(_("Enter a whole number of books."))
         return
     end
-    local provider = self:getProvider()
-    if not provider then
-        Widgets.message(_("No provider available."))
-        return
-    end
-    self:runWhenOnline(function()
-        self:runAsync(function()
-            local completed, ok = self:runInBackground(_("Saving goal…"),
-                function() return provider:set_reading_goal(goal) end)
-            if completed == false then return end
-            if ok == true then
-                self:setSetting("reading_goal_cache", goal)
-                Widgets.notify(string.format(_("Reading goal set to %d"), goal), 3, "trophy")
-            else
-                Widgets.message(_("Couldn't save the reading goal."))
-            end
-        end)
-    end)
+    -- Local-first: queue the goal; the background drain posts it.
+    Queue.enqueue({
+        operation = "reading_goal",
+        payload = { type = "reading_goal", goal = goal },
+    })
+    self:setSetting("reading_goal_cache", goal)
+    Widgets.notify(string.format(_("Reading goal set to %d"), goal), 3, "trophy")
+    self:processQueue()
 end
 
 -- Show per-year book counts from the reading-stats page.

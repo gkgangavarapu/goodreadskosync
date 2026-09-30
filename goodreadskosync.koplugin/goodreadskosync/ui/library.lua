@@ -13,6 +13,7 @@ taps Close, so actions (load, move, search) update it in place.
 local ButtonDialog = require("ui/widget/buttondialog")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
+local Queue = require("goodreadskosync.sync.queue")
 local Resolver = require("goodreadskosync.resolver.resolver")
 local Screen = require("device").screen
 local UIManager = require("ui/uimanager")
@@ -169,40 +170,33 @@ function Library.load(plugin)
 end
 
 function Library.move(plugin, data, book, from_shelf, to_shelf)
-    plugin:runWhenOnline(function()
-        local provider = plugin:getProvider()
-        plugin:runAsync(function()
-            local completed, ok = plugin:runInBackground(_("Updating Goodreads…"), function()
-                if provider.add_to_shelf then
-                    return provider:add_to_shelf(book.goodreads_id, to_shelf.slug)
-                end
-                return false
-            end)
-            if completed == false then return end
-            if not ok then
-                Widgets.notify(_("Update failed"))
-                return
-            end
-            -- Update the in-memory model, then redraw in place.
-            local books = from_shelf.books or {}
-            for i = #books, 1, -1 do
-                if tostring(books[i].goodreads_id) == tostring(book.goodreads_id) then
-                    table.remove(books, i)
-                end
-            end
-            if to_shelf.books ~= nil then
-                table.insert(to_shelf.books, book)
-            end
-            if from_shelf.count then
-                from_shelf.count = math.max(0, from_shelf.count - 1)
-            end
-            if to_shelf.count then
-                to_shelf.count = to_shelf.count + 1
-            end
-            Widgets.notify(string.format("%s · %s", book.title or book.goodreads_id, to_shelf.name))
-            Library.renderBooks(plugin, data, from_shelf)
-        end)
-    end)
+    if not book or not book.goodreads_id then return end
+    -- Local-first: queue the shelf change; the background drain posts it.
+    Queue.enqueue({
+        operation = "add_to_shelf",
+        book_id = book.goodreads_id,
+        uid = to_shelf.slug,
+        payload = { type = "add_to_shelf", slug = to_shelf.slug },
+    })
+    -- Update the in-memory model, then redraw in place.
+    local books = from_shelf.books or {}
+    for i = #books, 1, -1 do
+        if tostring(books[i].goodreads_id) == tostring(book.goodreads_id) then
+            table.remove(books, i)
+        end
+    end
+    if to_shelf.books ~= nil then
+        table.insert(to_shelf.books, book)
+    end
+    if from_shelf.count then
+        from_shelf.count = math.max(0, from_shelf.count - 1)
+    end
+    if to_shelf.count then
+        to_shelf.count = to_shelf.count + 1
+    end
+    Widgets.notify(string.format("%s · %s", book.title or book.goodreads_id, to_shelf.name), 3, "book")
+    Library.renderBooks(plugin, data, from_shelf)
+    plugin:processQueue()
 end
 
 function Library.searchAndAdd(plugin, data)
@@ -279,32 +273,25 @@ function Library.chooseShelfFor(plugin, data, candidate)
 end
 
 function Library.addToShelf(plugin, data, candidate, shelf)
-    plugin:runWhenOnline(function()
-        local provider = plugin:getProvider()
-        plugin:runAsync(function()
-            local completed, ok = plugin:runInBackground(_("Adding to Goodreads…"), function()
-                if provider.add_to_shelf then
-                    return provider:add_to_shelf(candidate.goodreads_id, shelf.slug)
-                end
-                return false
-            end)
-            if completed == false then return end
-            if not ok then
-                Widgets.notify(_("Update failed"))
-                return
-            end
-            if shelf.books ~= nil then
-                table.insert(shelf.books, {
-                    goodreads_id = tostring(candidate.goodreads_id),
-                    title = candidate.title,
-                })
-            end
-            if shelf.count then shelf.count = shelf.count + 1 end
-            Widgets.notify(string.format("%s · %s", candidate.title or candidate.goodreads_id,
-                shelf.name))
-            if plugin._library_menu then Library.renderShelves(plugin, data) end
-        end)
-    end)
+    if not candidate or not candidate.goodreads_id then return end
+    -- Local-first: queue the shelf change; the background drain posts it.
+    Queue.enqueue({
+        operation = "add_to_shelf",
+        book_id = candidate.goodreads_id,
+        uid = shelf.slug,
+        payload = { type = "add_to_shelf", slug = shelf.slug },
+    })
+    if shelf.books ~= nil then
+        table.insert(shelf.books, {
+            goodreads_id = tostring(candidate.goodreads_id),
+            title = candidate.title,
+        })
+    end
+    if shelf.count then shelf.count = shelf.count + 1 end
+    Widgets.notify(string.format("%s · %s", candidate.title or candidate.goodreads_id,
+        shelf.name), 3, "book")
+    if plugin._library_menu then Library.renderShelves(plugin, data) end
+    plugin:processQueue()
 end
 
 return Library

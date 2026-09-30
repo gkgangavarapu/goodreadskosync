@@ -370,6 +370,9 @@ function Controller:_syncPending()
         if summary and summary.queued_failed and summary.queued_failed > 0 then
             self:_notifyQueuedFailure(summary.queued_failed)
         end
+        if summary and (summary.remaining or 0) > 0 then
+            self:schedulePendingSync()
+        end
         if self._queue_queued then
             self._queue_queued = false
             self:processQueue()
@@ -387,7 +390,9 @@ function Controller:_syncPendingCore()
     -- Flush anything already queued (progress, notes, shelves, ratings).
     local flush = self:processQueueCore()
 
-    local sent, failed, changed = 0, 0, false
+    -- Collect the linked books whose local progress moved ahead of Goodreads,
+    -- then push only a small batch per run so this is never a long burst.
+    local targets = {}
     for key, mapping in pairs(Mappings.all()) do
         local gid = mapping.goodreads_id
         local lk = mapping.local_key or key
@@ -404,31 +409,53 @@ function Controller:_syncPendingCore()
                 and local_pct and local_pct < 100
             if local_pct and local_pct > 0 and local_pct ~= cloud_pct
                 and not dnf and not read_sticky then
-                local ok, err = provider:update_progress(gid, local_pct, "percent")
-                if ok then
-                    state.last_successful_percent = local_pct
-                    state.last_cloud_percent = local_pct
-                    State.set(lk, state)
-                    sent = sent + 1
-                    changed = true
-                else
-                    Queue.enqueue({
-                        operation = "progress",
-                        book_id = gid,
-                        local_key = lk,
-                        payload = { type = "progress", percent = local_pct,
-                            value = local_pct, unit = "percent" },
-                    })
-                    failed = failed + 1
-                    diag("syncPending: failed book=", tostring(gid),
-                        " error=", tostring(err))
-                end
+                targets[#targets + 1] = {
+                    gid = gid, lk = lk, pct = local_pct, state = state,
+                }
             end
         end
     end
-    diag("syncPending: sent=", tostring(sent), " failed=", tostring(failed))
+
+    local max_books = Constants.SYNC_PENDING_MAX or 3
+    local batch = math.min(#targets, max_books)
+    local sent, failed, changed = 0, 0, false
+    for i = 1, batch do
+        local t = targets[i]
+        local ok, err = provider:update_progress(t.gid, t.pct, "percent")
+        if ok then
+            t.state.last_successful_percent = t.pct
+            t.state.last_cloud_percent = t.pct
+            State.set(t.lk, t.state)
+            sent = sent + 1
+            changed = true
+        else
+            Queue.enqueue({
+                operation = "progress",
+                book_id = t.gid,
+                local_key = t.lk,
+                payload = { type = "progress", percent = t.pct,
+                    value = t.pct, unit = "percent" },
+            })
+            failed = failed + 1
+            diag("syncPending: failed book=", tostring(t.gid),
+                " error=", tostring(err))
+        end
+    end
+    local remaining = #targets - batch
+    diag("syncPending: sent=", tostring(sent), " failed=", tostring(failed),
+        " remaining=", tostring(remaining))
     return { ok = true, changed = changed, sent = sent, failed = failed,
-        queued_failed = (flush and flush.permanent) or 0 }
+        queued_failed = (flush and flush.permanent) or 0, remaining = remaining }
+end
+
+-- Continue a large "Sync now" in small batches after a short pause.
+function Controller:schedulePendingSync()
+    if self._pending_sync_scheduled then return end
+    self._pending_sync_scheduled = true
+    UIManager:scheduleIn(15, function()
+        self._pending_sync_scheduled = false
+        self:syncNow()
+    end)
 end
 
 
@@ -667,6 +694,14 @@ function Controller:processQueueCore()
             end
         elseif op.operation == "rating" then
             ok, err = provider:set_rating(op.book_id, op.payload.rating)
+        elseif op.operation == "add_to_shelf" then
+            if type(provider.add_to_shelf) == "function" then
+                ok, err = provider:add_to_shelf(op.book_id, op.payload.slug)
+            else
+                ok, err = false, Constants.ERROR.UNSUPPORTED
+            end
+        elseif op.operation == "reading_goal" then
+            ok, err = provider:set_reading_goal(op.payload.goal)
         elseif op.operation == "note" then
             ok, err = provider:update_progress(op.book_id,
                 op.payload.value or op.payload.percent, op.payload.unit, op.payload.note)
@@ -685,6 +720,13 @@ function Controller:processQueueCore()
                     last_successful_page = (op.payload and op.payload.unit == "pages")
                         and op.payload.value or nil,
                 })
+            elseif op.operation == "shelf" and op.local_key then
+                State.patch(op.local_key, {
+                    shelf = op.payload.shelf,
+                    last_pushed_shelf = op.payload.shelf,
+                })
+            elseif op.operation == "rating" and op.local_key then
+                State.patch(op.local_key, { rating = op.payload.rating })
             end
             sent = sent + 1
             sent_info[#sent_info + 1] = {
@@ -742,10 +784,12 @@ function Controller:_flushToast(sent)
             local action
             if item.operation == "progress" and item.percent then
                 action = string.format(_("Progress %d%%"), item.percent)
-            elseif item.operation == "shelf" then
+            elseif item.operation == "shelf" or item.operation == "add_to_shelf" then
                 action = _("Shelf updated")
             elseif item.operation == "rating" then
                 action = _("Rating updated")
+            elseif item.operation == "reading_goal" then
+                action = _("Goal updated")
             elseif item.operation == "note" then
                 action = _("Note posted")
             else

@@ -473,25 +473,20 @@ function Goodreads:rateCurrentBook()
 end
 
 function Goodreads:submitRating(stars)
-    local mapping = self:currentMapping()
+    local mapping, identity = self:currentMapping()
     if not mapping or not mapping.goodreads_id then return end
-    local provider = self:getProvider()
-    self:runAsync(function()
-        local completed, ok = self:runInBackground(_("Saving rating…"), function()
-            return provider:set_rating(mapping.goodreads_id, stars)
-        end)
-        if completed == false then return end
-        local t = shortTitle(mapping.title)
-        if ok then
-            Widgets.notify(t
-                and string.format(_("%s · Rated %d stars"), t, stars)
-                or string.format(_("Rated %d stars"), stars), 3, "star")
-        else
-            Widgets.notify(t
-                and string.format(_("%s · Rating failed"), t)
-                or _("Rating failed"), 3, "warn")
-        end
-    end)
+    -- Local-first: queue the rating; the background drain posts it.
+    Queue.enqueue({
+        operation = "rating",
+        book_id = mapping.goodreads_id,
+        local_key = identity and identity.local_key,
+        payload = { type = "rating", rating = stars },
+    })
+    local t = shortTitle(mapping.title)
+    Widgets.notify(t
+        and string.format(_("%s · Rated %d stars"), t, stars)
+        or string.format(_("Rated %d stars"), stars), 3, "star")
+    self:processQueue()
 end
 
 
@@ -1337,7 +1332,6 @@ function Goodreads:setShelf(shelf)
         return
     end
     local local_key = identity.local_key
-    local previous = State.get(local_key)
 
     local patch = {
         shelf = shelf,
@@ -1363,22 +1357,17 @@ function Goodreads:setShelf(shelf)
     end
     State.patch(local_key, patch)
 
-    local provider = self:getProvider()
-    self:runAsync(function()
-        local completed, ok = self:runInBackground(_("Updating Goodreads…"), function()
-            return provider:set_shelf(mapping.goodreads_id, shelf)
-        end)
-        if completed == false then return end
-        local t = shortTitle(mapping.title)
-        if ok then
-            local verb = Shelves.VERB[shelf] or _(Shelves.label(shelf))
-            Widgets.notify(t and string.format("%s · %s", t, verb) or verb)
-        else
-            State.set(local_key, previous)
-            Widgets.notify(t and string.format(_("%s · update failed"), t)
-                or _("Update failed"))
-        end
-    end)
+    -- Local-first: queue the shelf change; the background drain posts it.
+    Queue.enqueue({
+        operation = "shelf",
+        book_id = mapping.goodreads_id,
+        local_key = local_key,
+        payload = { type = "shelf", shelf = shelf },
+    })
+    local t = shortTitle(mapping.title)
+    local verb = Shelves.VERB[shelf] or _(Shelves.label(shelf))
+    Widgets.notify(t and string.format("%s · %s", t, verb) or verb, 3, "book")
+    self:processQueue()
 end
 
 -- End of book: mark Read when the user opted into automatic completion.
