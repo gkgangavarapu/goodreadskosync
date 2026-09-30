@@ -630,8 +630,23 @@ function Controller:processQueueCore()
     local ids, seen = {}, {}
     local sent_info = {}
     local due = Queue.due()
+    local max_ops = Constants.QUEUE_FLUSH_MAX_OPS or 3
+    local budget = Constants.QUEUE_FLUSH_BUDGET or 20
+    local started = os.time()
+    local processed = 0
     diag("processQueue: due=", tostring(#due))
     for _, op in ipairs(due) do
+        -- Bounded flush: never post an unbounded burst (a long serial burst at
+        -- close/resume is what hung the device). The rest drains later.
+        if processed >= max_ops then
+            diag("processQueue: batch limit reached")
+            break
+        end
+        if os.time() - started >= budget then
+            diag("processQueue: time budget reached")
+            break
+        end
+        processed = processed + 1
         local ok, err
         local drop = false
         local percent
@@ -702,10 +717,12 @@ function Controller:processQueueCore()
             end
         end
     end
+    local remaining = #due - processed
     diag("processQueue: done sent=", tostring(sent), " failed=",
-        tostring(failed), " permanent=", tostring(permanent))
+        tostring(failed), " permanent=", tostring(permanent),
+        " remaining=", tostring(remaining))
     return { sent = sent, failed = failed, permanent = permanent, ids = ids,
-        sent_info = sent_info }
+        sent_info = sent_info, remaining = remaining }
 end
 
 -- Short, specific toast naming the books whose offline changes were sent and
@@ -789,12 +806,26 @@ function Controller:processQueue()
         if self._queue_queued then
             self._queue_queued = false
             self:processQueue()
+        elseif (res.remaining or 0) > 0 then
+            -- More items than the batch cap: drain the rest shortly, rather
+            -- than blocking on a long burst now.
+            self:scheduleQueueDrain()
         end
         -- A sync that arrived while this flush was running.
         if self._sync_queued and not self._sync_busy then
             self._sync_queued = false
             self:syncSilently()
         end
+    end)
+end
+
+-- Continue draining a large queue after a short pause. One timer at a time.
+function Controller:scheduleQueueDrain()
+    if self._queue_drain_scheduled then return end
+    self._queue_drain_scheduled = true
+    UIManager:scheduleIn(15, function()
+        self._queue_drain_scheduled = false
+        self:processQueue()
     end)
 end
 

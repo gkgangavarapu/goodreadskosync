@@ -1237,10 +1237,16 @@ function Goodreads:onCloseDocument()
         end
     end
 
-    -- Flush the queue now so the final progress isn't delayed until the next
-    -- timer tick or resume.
-    diag("onCloseDocument: flush queue")
-    self:processQueue()
+    -- Flush only a small queue on close. A long batch (e.g. many notes) must
+    -- not run while the reader is tearing down; the rest drains on the next
+    -- resume, reconnect, or timer tick.
+    local pending = Queue.due()
+    if #pending <= (Constants.QUEUE_CLOSE_FLUSH_MAX or 2) then
+        diag("onCloseDocument: flush queue (", tostring(#pending), ")")
+        self:processQueue()
+    else
+        diag("onCloseDocument: ", tostring(#pending), " queued -> defer flush")
+    end
 end
 
 function Goodreads:onSuspend()

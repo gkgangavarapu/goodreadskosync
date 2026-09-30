@@ -8,7 +8,7 @@ the resolver and sync engine remain usable from unit tests without KOReader.
 --]]
 
 local Constants = {
-    VERSION = "1.17.2",
+    VERSION = "1.17.3",
 
     -- Storage schema version. Bump only alongside a migration function.
     SCHEMA_VERSION = 1,
@@ -74,6 +74,16 @@ local Constants = {
 
     -- Exponential retry schedule for the offline queue, in seconds.
     BACKOFF = { 30, 120, 300, 900, 1800 },
+
+    -- Queue flush limits. Each item is a network round-trip, so never post an
+    -- unbounded burst in one go: stop after this many items or this many
+    -- seconds, whichever comes first, and leave the rest for the next flush.
+    QUEUE_FLUSH_MAX_OPS = 3,
+    QUEUE_FLUSH_BUDGET = 20,
+
+    -- On document close, only flush when at most this many items are pending;
+    -- a longer queue is drained later so closing never waits on the network.
+    QUEUE_CLOSE_FLUSH_MAX = 2,
 
     -- Conflict policies for cloud-vs-local progress.
     CONFLICT_POLICY = {

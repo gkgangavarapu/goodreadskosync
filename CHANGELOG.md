@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.3] - 2026-09-30
+
+Fixes a hang that could freeze KOReader when several queued changes — especially notes — tried to sync at once.
+
+**Fixes**
+- Queue flushes are now bounded: only a few changes are sent per pass, and the rest drain shortly after, so a long network burst can't stall the device.
+- Closing a book no longer waits on a large queue; pending changes sync on the next resume, reconnect, or timer tick.
+- No data is lost — anything not sent this pass stays queued and goes out on the next one.
+
 ## [1.17.2] - 2026-09-29
 
 Notifications are much easier to read, and updating is clearer.
