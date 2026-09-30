@@ -1,47 +1,133 @@
 #!/bin/sh
-# Cross-compile the NetSurf renderer for the Kindle Paperwhite 3.
+# Reproducible cross-build of netsurf_render for the Kindle Paperwhite 3.
 #
-#   CROSS=arm-kindle-linux-gnueabi- \
-#   SYSROOT=/path/to/pw3-sysroot \
-#   NETSURF_TREE=/path/to/netsurf-all-3.11-armv7 \
-#   ./build-pw3.sh
+# Target (verified): PW3 => KOReader "kindlepw2" target =>
+#   armv7-a, Cortex-A9, NEON, EABI5, **soft-float ABI**, glibc <= 2.12.
 #
-# The NetSurf libraries must already be built for armv7 in $NETSURF_TREE (build
-# them the same way as build-dev.sh but with HOST/CC set to the cross toolchain
-# and TARGET=framebuffer, which is the target that builds libnsfb). The renderer
-# itself is software-only: no EGL/GBM/DRM, and it never opens /dev/fb0.
+# Toolchain: the KOReader KOXToolchain release for "kindlepw2"
+#   https://github.com/koreader/koxtoolchain/releases  (asset: kindlepw2.tar.*)
+#   It bundles arm-kindlepw2-linux-gnueabi-{gcc,binutils,...} (GCC 14.2, glibc 2.12).
+#
+# IMPORTANT: the toolchain's host binaries are glibc-dynamic x86_64 programs, so
+# this script must run on a glibc host (e.g. a Debian chroot). See pw3-toolchain.md.
+#
+# Usage:
+#   KOX_TC=/path/to/x-tools/arm-kindlepw2-linux-gnueabi ./build-pw3.sh
+#
+# Env:
+#   KOX_TC   (required) path to the extracted toolchain dir (contains bin/)
+#   WORK     (optional) build dir, default ~/.cache/netsurf-pw3
+#   JOBS     (optional) parallelism, default nproc
+#
+# Output: out/pw3/netsurf_render (statically linked ARM executable)
 set -eu
 
-: "${CROSS:?set CROSS to the arm toolchain prefix (e.g. arm-kindle-linux-gnueabi-)}"
-: "${SYSROOT:?set SYSROOT to the PW3 cross sysroot}"
-: "${NETSURF_TREE:?set NETSURF_TREE to an armv7 NetSurf source tree}"
-
 HERE="$(cd "$(dirname "$0")" && pwd)"
-BUILD="$NETSURF_TREE/netsurf/build"
-OUT="$HERE/out/pw3"
-mkdir -p "$OUT"
-
-CC="${CROSS}gcc"
-MONKEY="$NETSURF_TREE/netsurf/frontends/monkey"
-SRCS="$MONKEY/render.c $MONKEY/plot.c $MONKEY/bitmap.c"
-
-echo "== cross-compiling netsurf_render for armv7 =="
-# These are the objects NetSurf's own build links into the frontend; the
-# simplest reliable approach is to build the whole frontend with its Makefile.
-export CFLAGS="-fcommon --sysroot=$SYSROOT"
-export PKG_CONFIG_PATH="$NETSURF_TREE/inst-framebuffer/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-export PATH="$PATH:$NETSURF_TREE/inst-framebuffer/bin"
-
-CC="$CC" CXX="${CROSS}g++" \
-	SRC="$NETSURF_TREE" \
-	make -C "$NETSURF_TREE/netsurf" TARGET=framebuffer \
-		HOST="${CROSS%-}" -j"$(nproc)" 2>&1 | tail -20
-
-cp "$NETSURF_TREE/netsurf/netsurf_render" "$OUT/netsurf_render" 2>/dev/null || {
-	echo "expected $NETSURF_TREE/netsurf/netsurf_render; see build output" >&2
+: "${KOX_TC:?set KOX_TC to the extracted kindlepw2 toolchain dir (contains bin/)}"
+[ -x "$KOX_TC/bin/arm-kindlepw2-linux-gnueabi-gcc" ] || {
+	echo "error: $KOX_TC/bin/arm-kindlepw2-linux-gnueabi-gcc not found" >&2
+	echo "       KOX_TC must point at x-tools/arm-kindlepw2-linux-gnueabi" >&2
 	exit 1
 }
 
+WORK="${WORK:-$HOME/.cache/netsurf-pw3}"
+JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+SRC_VERSION=3.11
+TARBALL="netsurf-all-$SRC_VERSION.tar.gz"
+TARBALL_URL="http://download.netsurf-browser.org/netsurf/releases/source-full/$TARBALL"
+TREE="$WORK/netsurf-all-$SRC_VERSION"
+STAGE="$TREE/inst-monkey"
+OUT="$HERE/out/pw3"
+TCBIN="$KOX_TC/bin"
+TC=arm-kindlepw2-linux-gnueabi
+ARCHFLAGS="-march=armv7-a -mtune=cortex-a9 -mfpu=neon -mfloat-abi=softfp -mthumb -O2"
+
+export PATH="$TCBIN:$PATH"
+
+echo "== work dir $WORK =="
+mkdir -p "$WORK" "$WORK/src" "$OUT"
+cd "$WORK/src"
+
+fetch() { [ -f "$1" ] || curl -fsSL -o "$1" "$2"; }
+echo "== fetching sources =="
+fetch "$TARBALL" "$TARBALL_URL"
+fetch zlib.tar.gz "https://github.com/madler/zlib/archive/refs/tags/v1.3.1.tar.gz"
+fetch openssl.tar.gz "https://github.com/openssl/openssl/releases/download/openssl-3.0.15/openssl-3.0.15.tar.gz"
+fetch curl.tar.gz "https://github.com/curl/curl/releases/download/curl-8_10_1/curl-8.10.1.tar.gz"
+
+[ -d "$TREE" ] || tar xzf "$TARBALL"
+for d in zlib-1.3.1 openssl-3.0.15 curl-8.10.1; do
+	[ -d "$d" ] || { case $d in zlib*) tar xzf zlib.tar.gz;; openssl*) tar xzf openssl.tar.gz;; *) tar xzf curl.tar.gz;; esac; }
+done
+
+# ------------------------------------------------------------------ deps
+echo "== zlib =="
+if [ ! -f "$STAGE/lib/libz.a" ]; then
+	cd "$WORK/src/zlib-1.3.1"
+	CC=$TC-gcc AR=$TC-ar RANLIB=$TC-ranlib CFLAGS="$ARCHFLAGS -fPIC" \
+		./configure --prefix="$STAGE" --static >/tmp/pw3-zlib.log 2>&1
+	make -j"$JOBS" >/tmp/pw3-zlib.log 2>&1
+	make install >/tmp/pw3-zlib.log 2>&1
+fi
+
+echo "== openssl (static, no tests) =="
+if [ ! -f "$STAGE/lib/libcrypto.a" ]; then
+	cd "$WORK/src/openssl-3.0.15"
+	./Configure linux-armv4 --prefix="$STAGE" --openssldir="$STAGE/ssl" \
+		--cross-compile-prefix="$TC-" no-shared no-tests \
+		CFLAGS="$ARCHFLAGS -fPIC" >/tmp/pw3-ossl.log 2>&1
+	make -j"$JOBS" >/tmp/pw3-ossl.log 2>&1
+	make install_sw >/tmp/pw3-ossl.log 2>&1
+fi
+
+echo "== curl (static, HTTP/HTTPS only) =="
+if [ ! -f "$STAGE/lib/libcurl.a" ]; then
+	cd "$WORK/src/curl-8.10.1"
+	CC=$TC-gcc AR=$TC-ar RANLIB=$TC-ranlib CFLAGS="$ARCHFLAGS -fPIC" \
+	./configure --host="$TC" --prefix="$STAGE" \
+		--with-openssl="$STAGE" --with-zlib="$STAGE" \
+		--disable-shared --enable-static \
+		--without-libpsl --without-libidn2 --without-brotli --without-zstd \
+		--disable-ldap --disable-ftp --disable-file --disable-dict --disable-telnet \
+		--disable-tftp --disable-pop3 --disable-imap --disable-smtp --disable-gopher \
+		--disable-mqtt --disable-rtsp --disable-smb --disable-manual \
+		--disable-threaded-resolver >/tmp/pw3-curl.log 2>&1
+	make -j"$JOBS" >/tmp/pw3-curl.log 2>&1
+	make install >/tmp/pw3-curl.log 2>&1
+fi
+
+# ------------------------------------------------------------- NetSurf
+echo "== apply frontend + PW3 build tweaks =="
+grep -rl -- '-Werror' --include='Makefile*' "$TREE" 2>/dev/null | while read -r f; do
+	sed -i 's/-Werror//g' "$f"
+done
+sh "$HERE/apply-frontend.sh" "$TREE" >/dev/null
+# libdom's expat binding is only needed for XML/SVG; disable to avoid the dep.
+sed -i 's/WITH_EXPAT_BINDING := yes/WITH_EXPAT_BINDING := no/' "$TREE/libdom/Makefile.config" 2>/dev/null || true
+# libsvgtiny forces the XML binding and is not used by this frontend.
+sed -i 's/^NSLIB_SVGTINY_TARG := libsvgtiny/NSLIB_SVGTINY_TARG :=/' "$TREE/Makefile"
+# Static link (self-contained binary for the device and for qemu testing).
+cat > "$TREE/netsurf/Makefile.config" <<EOF
+LDFLAGS += -static -static-libgcc
+EOF
+grep -q 'static pthread after archives' "$TREE/netsurf/Makefile" || \
+	printf '\n# static pthread after archives\nLDFLAGS += -lpthread -ldl -lrt\n' >> "$TREE/netsurf/Makefile"
+
+echo "== cross-build NetSurf =="
+export CC=$TC-gcc CXX=$TC-g++ AR=$TC-ar
+export BUILD=x86_64-linux-gnu HOST=$TC
+export CFLAGS="$ARCHFLAGS -fcommon"
+export CXXFLAGS="$CFLAGS"
+# host tool (split-messages) needs host zlib headers
+cd "$TREE"
+make TARGET=monkey \
+	NETSURF_USE_DUKTAPE=NO NETSURF_USE_WEBP=NO NETSURF_USE_JPEGXL=NO \
+	NETSURF_USE_PNG=NO NETSURF_USE_JPEG=NO NETSURF_USE_BMP=NO NETSURF_USE_GIF=NO \
+	NETSURF_USE_CURL=YES NETSURF_USE_OPENSSL=YES NETSURF_USE_NSPSL=NO NETSURF_USE_NSSVG=NO \
+	-j"$JOBS" >/tmp/pw3-netsurf.log 2>&1 || { tail -30 /tmp/pw3-netsurf.log; exit 1; }
+
+cp "$TREE/netsurf/netsurf_render" "$OUT/netsurf_render"
+"$TCBIN/$TC-strip" "$OUT/netsurf_render" 2>/dev/null || true
 echo "== built $OUT/netsurf_render =="
-echo "Copy the binary and its shared libraries to the device, e.g."
-echo "  /mnt/us/koreader/goodreadskosync/bin/netsurf_render"
+ls -l "$OUT/netsurf_render"
+file "$OUT/netsurf_render" 2>/dev/null || true

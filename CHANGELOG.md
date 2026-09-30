@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-09-30
+
+PW3 bring-up for the NetSurf engine (cross-compilation).
+
+- Identified and verified the exact PW3 target ABI from KOReader sources: the `kindlepw2` toolchain — armv7-a/Cortex-A9/NEON, **soft-float**, EABI5, glibc ≤ 2.12.
+- `engines/netsurf/build-pw3.sh`: reproducible cross-build using KOReader's existing `kindlepw2` toolchain; cross-compiles zlib + OpenSSL + libcurl from source and produces a **statically linked** ARM `netsurf_render`. Fails clearly if the toolchain is missing.
+- `engines/netsurf/pw3-toolchain.md`: target facts, toolchain source, glibc-host requirement, exact target libraries.
+- `engines/netsurf/package-pw3.sh`: device-test bundle (`netsurf_render` + NetSurf `resources/` + `run.sh` + smoke notes).
+- Verified: correct ARM EABI5 soft-float binaries; the static ARM renderer executes under `qemu-arm` and writes `frame.pgm`/`frame.json`. On-device runtime not yet verified.
+
 ## [1.21.0] - 2026-09-30
 
 Real NetSurf engine: the offscreen renderer now actually builds and renders.

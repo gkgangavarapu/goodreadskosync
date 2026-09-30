@@ -69,9 +69,23 @@ rebuilds the frontend as `netsurf_render`.
 
 ## Cross-compile for the PW3
 
-See `build-pw3.sh`. The NetSurf libraries must first be built for armv7 in a
-cross sysroot; the renderer is software-only. PWM/device numbers are not yet
-measured (no device in the build environment).
+Use KOReader's existing **`kindlepw2`** toolchain (armv7-a, Cortex-A9, NEON,
+EABI5, **soft-float**, glibc ≤ 2.12) — see [`pw3-toolchain.md`](pw3-toolchain.md)
+for the target facts, how to obtain the toolchain, and the required glibc host.
+
+```sh
+KOX_TC=/path/to/x-tools/arm-kindlepw2-linux-gnueabi ./build-pw3.sh
+./package-pw3.sh          # -> out/pw3/netsurf_render-pw3.tar.gz
+```
+
+`build-pw3.sh` cross-compiles zlib, OpenSSL and libcurl from source, applies the
+offscreen frontend, and produces a **statically linked** ARM `netsurf_render`
+(no `DT_NEEDED`). `package-pw3.sh` builds the device bundle (binary + NetSurf
+`resources/` + `run.sh`).
+
+Verified so far: the toolchain produces correct ARM EABI5 soft-float binaries,
+and the static ARM `netsurf_render` executes under `qemu-arm` and writes
+`frame.pgm`/`frame.json`. **On-device PW3 runtime is not yet verified.**
 
 ## Test results (x86_64 Alpine, NetSurf 3.11)
 
