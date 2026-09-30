@@ -1,16 +1,20 @@
 #!/bin/sh
-# Quick smoke test: render example.com through the helper and report.
+# Render one URL through the helper and report. Usage:
+#   ./smoke.sh [path-to-netsurf_render] [url]
 set -eu
 
 BIN="${1:-./out/netsurf_render}"
+URL="${2:-https://example.com/}"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 
 echo "== helper: $BIN"
-"$BIN" --url https://example.com/ --width 600 --height 800 --out "$OUT/example"
+echo "== url:    $URL"
+"$BIN" --url "$URL" --width 600 --height 800 --out "$OUT/page"
 
-echo "== frame:"
-ls -l "$OUT/example.pgm" "$OUT/example.json"
-head -c 200 "$OUT/example.json"; echo
-echo "== expected first bytes of PGM: P5"
-head -c 2 "$OUT/example.pgm"; echo
+echo "== outputs =="
+ls -l "$OUT/page.pgm" "$OUT/page.json"
+echo "== json =="
+cat "$OUT/page.json"; echo
+echo "== pgm magic (expect P5) =="
+head -c 2 "$OUT/page.pgm"; echo

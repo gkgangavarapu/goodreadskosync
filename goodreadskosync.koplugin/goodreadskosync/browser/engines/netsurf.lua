@@ -138,14 +138,34 @@ function NetSurf:title() return self._title or "" end
 
 function NetSurf:url() return self._url or "about:blank" end
 
--- Write goodreads cookies to the helper's cookie jar (best effort).
-function NetSurf:set_cookies(cookie_header)
+-- Parse a "name=value; name2=value2" Cookie header into Netscape cookie-file
+-- lines that NetSurf's cookie jar understands. Pure, unit-testable.
+-- tab-separated: domain, includeSubdomains, path, secure, expiry, name, value
+function NetSurf.netscape_cookie_lines(header, domain, expires)
+    local lines = {}
+    if type(header) ~= "string" or header == "" then return lines end
+    domain = domain or ".goodreads.com"
+    local include = (domain:sub(1, 1) == ".") and "TRUE" or "FALSE"
+    local expiry = tostring(tonumber(expires) or 0)
+    for pair in header:gmatch("[^;]+") do
+        local name, value = pair:match("^%s*(.-)%s*=%s*(.-)%s*$")
+        if name and name ~= "" and value then
+            lines[#lines + 1] = table.concat(
+                { domain, include, "/", "FALSE", expiry, name, value }, "\t")
+        end
+    end
+    return lines
+end
+
+-- Write the session cookies to the helper's Netscape cookie jar (best effort).
+function NetSurf:set_cookies(cookie_header, domain, expires)
     if not self.cookie_file or self.cookie_file == "" then return end
-    if type(cookie_header) ~= "string" or cookie_header == "" then return end
+    local lines = NetSurf.netscape_cookie_lines(cookie_header, domain, expires)
+    if #lines == 0 then return end
     local f = io.open(self.cookie_file, "w")
     if not f then return end
-    -- Netscape cookie-file-ish: the helper only needs the raw Cookie header.
-    f:write(cookie_header, "\n")
+    f:write("# Netscape HTTP Cookie File\n")
+    f:write(table.concat(lines, "\n"), "\n")
     f:close()
 end
 

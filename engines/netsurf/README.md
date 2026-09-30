@@ -1,17 +1,33 @@
-# NetSurf engine (PW3) — build kit
+# NetSurf engine — real offscreen renderer
 
 This is the **second local browser engine** for the plugin's `BrowserEngine`
-contract. It is *not* NetSurf's framebuffer frontend and it **never touches
-`/dev/fb0`**: it renders into an **libnsfb memory surface**, then writes:
+contract. It links NetSurf's actual HTML parser, CSS engine, layout engine and
+image decoders, renders into an **in-memory** pixel buffer, and writes:
 
 - `frame.pgm` — 8-bit grayscale P5, exactly `width × height` bytes
 - `frame.json` — title, url, dimensions, scroll height, and the hitmap
 
-The Lua adapter `goodreadskosync/browser/engines/netsurf.lua` runs this helper
-and exposes `load/render/tap/scroll/back/forward/reload/title/url/capabilities`.
+It never touches `/dev/fb0` and does not use NetSurf's framebuffer frontend.
 
-The helper is **opt-in**. Until it is built and copied to the device, the plugin
-keeps using its CRE fallback engine.
+## How it works
+
+NetSurf has no embeddable library API, so the renderer is a small custom
+frontend built **from NetSurf's core object files** (the same way NetSurf's own
+frontends are built). It started from NetSurf's minimal headless `monkey`
+frontend and replaces its text plotter with a memory rasteriser:
+
+| file | role |
+|---|---|
+| `frontend/plot.c` | plotter that rasterises rectangles, lines, polygons, text (embedded 8×8 font) and images into a 32bpp ARGB buffer |
+| `frontend/bitmap.c` | 32bpp image bitmaps + accessors |
+| `frontend/render.c` | one-shot driver: load URL → event loop → redraw → PGM + hitmap |
+| `frontend/render.h` | shared declarations |
+| `frontend/font8x8_basic.h` | public-domain 8×8 font |
+
+`apply-frontend.sh` copies these over a NetSurf source tree's `monkey` frontend
+and patches it (viewport size, one-shot mode, `EXETARGET := netsurf_render`).
+The hitmap is built by walking NetSurf's real HTML **box tree**
+(`html_get_box_tree` + `struct box::href`).
 
 ## Protocol
 
@@ -19,70 +35,62 @@ keeps using its CRE fallback engine.
 netsurf_render --url URL --width W --height H --scroll Y --out PREFIX [--cookies FILE]
 ```
 
-Always exits `0` on success. On failure exits non-zero and prints a reason to
-stderr. Outputs `PREFIX.pgm` and `PREFIX.json`.
+Exits `0` on success, non-zero with a reason on stderr otherwise. Writes
+`PREFIX.pgm` and `PREFIX.json`.
 
-`frame.json`:
+`--cookies` is a Netscape-format cookie file (NetSurf's native jar). The Lua
+adapter (`goodreadskosync/browser/engines/netsurf.lua`) writes this format.
 
-```json
-{
-  "url": "https://example.com/",
-  "title": "Example Domain",
-  "width": 600, "height": 800,
-  "scroll_h": 1024, "scroll_y": 0,
-  "hits": [
-    { "x": 12, "y": 40, "w": 180, "h": 22, "href": "https://example.com/more" }
-  ]
-}
-```
+## Build
 
-## Build on the development machine (x86_64)
+Alpine (matches the environment this was developed and tested in):
 
 ```sh
-cd engines/netsurf
+./build-dev.sh          # installs deps, downloads source-full, builds
+# -> ./out/netsurf_render
+```
+
+Any distro, given the dependencies in the `Dockerfile`:
+
+```sh
+./build-dev.sh
+```
+
+Container:
+
+```sh
 docker build -t netsurf-render .
 docker run --rm -v "$PWD/out:/out" netsurf-render
-# -> out/netsurf_render
 ```
 
-Or natively, after installing the NetSurf dependencies (see Dockerfile):
+`build-dev.sh` downloads NetSurf's `source-full-3.11` bundle (NetSurf + all its
+libraries) and builds `TARGET=monkey`. It applies `apply-frontend.sh` and
+rebuilds the frontend as `netsurf_render`.
 
-```sh
-./build-dev.sh          # builds ./out/netsurf_render
-./out/netsurf_render --url https://example.com --width 600 --height 800 --out /tmp/example
-```
+## Cross-compile for the PW3
 
-Then check the smoke test:
+See `build-pw3.sh`. The NetSurf libraries must first be built for armv7 in a
+cross sysroot; the renderer is software-only. PWM/device numbers are not yet
+measured (no device in the build environment).
 
-```sh
-./smoke.sh              # runs example.com through the helper
-```
+## Test results (x86_64 Alpine, NetSurf 3.11)
 
-## Cross-compile for the Kindle PW3
+| input | result |
+|---|---|
+| `https://example.com/` | ✅ title, heading, paragraph; 1 link hit at (240,241) |
+| `https://www.netsurf-browser.org/` | ✅ full layout, `scroll_h=4950`, ~60 link hits |
+| `https://www.gnu.org/` | ✅ full layout, `scroll_h=6862`, ~57 link hits |
+| `https://www.goodreads.com/book/show/…` | ✅ title, `scroll_h=17013`, cover image drawn, link hits |
+| `https://www.gnu.org/graphics/gnu-head-sm.jpg` | ✅ image content rendered (129×122 JPEG) |
+| Goodreads authenticated pages | ⚠️ cookie plumbing works, but the saved session was **expired**, so Goodreads redirected to sign-in |
+| `https://www.goodreads.com/` (home) | ⚠️ blank: Goodreads' home is JS/app-driven with no server-rendered body |
 
-The PW3 is an ARMv7 (Cortex-A9, hard-float) device with a glibc-based Kindle
-Linux and **no GPU**. Point the script at your toolchain sysroot:
+### Known limitations
 
-```sh
-CROSS=arm-kindle-linux-gnueabi- \
-SYSROOT=/path/to/pw3-sysroot \
-./build-pw3.sh
-```
-
-The result is statically biased toward software rendering (no EGL/GBM/DRM).
-Copy `netsurf_render` plus its shared deps to the device, e.g.
-`/mnt/us/koreader/goodreadskosync/bin/netsurf_render`, and point the plugin's
-setting `browser_netsurf_bin` at it.
-
-## Status / honesty
-
-This is a **spike**. The pieces here that are complete and self-contained:
-
-- CLI + PGM writer + JSON hitmap writer (no external deps)
-- libnsfb **memory** surface setup (safe: no framebuffer device)
-
-The pieces that depend on the exact NetSurf source revision (its embedding API
-is not stable, and `monkey`-style frontends are the only supported entry points)
-are marked `NETSURF-INTEGRATION` in `netsurf_render.c`. Building against a
-NetSurf checkout is expected to need small header/API adjustments — that work
-must happen on the machine with the toolchain, not in this repo.
+- **No JavaScript.** Goodreads' JS-only pages (review editor, home feed) are
+  blank or incomplete. `capabilities().js` is `false`.
+- CSS support is NetSurf's (CSS 2.1 era): floats and simple layouts look fine,
+  modern flex/grid does not.
+- `frame.json` hit rectangles come from inline link boxes; nested/absolute
+  positioning may be approximate.
+- PW3 (armv7, 512 MB, no GPU) is **not tested** here — only x86_64 Alpine.

@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-09-30
+
+Real NetSurf engine: the offscreen renderer now actually builds and renders.
+
+- `engines/netsurf/` is now a real frontend over NetSurf's core (HTML parser, CSS engine, layout engine, image decoders), built from NetSurf 3.11 source-full. It rasterises into an in-memory buffer and writes `frame.pgm` (P5 grayscale) and `frame.json` (title, url, dimensions, scroll height, link hitmap).
+- `apply-frontend.sh`, `build-dev.sh`, `build-pw3.sh` and a working `Dockerfile` reproduce the build; `smoke.sh` renders a URL end-to-end.
+- Verified renders: example.com, netsurf-browser.org, gnu.org, a Goodreads book page (cover image + link hits), and a standalone JPEG.
+- Fixed a crash rendering non-HTML content (guard the box-tree walk on `content_get_type`).
+- The Lua engine adapter now writes Netsurf's Netscape cookie jar format; new tests cover cookie formatting (219 total).
+- Never selected automatically: CRE stays the fallback until a helper binary is present.
+
 ## [1.20.0] - 2026-09-30
 
 Second local browser engine: NetSurf (opt-in, dev) plus its build kit.

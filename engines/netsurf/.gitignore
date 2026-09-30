@@ -1,0 +1,5 @@
+# Build artifacts for the native NetSurf renderer (per-architecture, not packaged).
+out/
+*.o
+*.pgm
+*.json

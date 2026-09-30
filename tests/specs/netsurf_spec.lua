@@ -82,6 +82,35 @@ describe("browser.engines.netsurf", function()
         assert_equal("https://x/next", e:url())
     end)
 
+    it("formats a Cookie header as Netscape cookie lines", function()
+        local lines = NetSurf.netscape_cookie_lines(
+            "sst-main=abc; ccsid=555-1", ".goodreads.com", 1821801443)
+        assert_equal(2, #lines)
+        assert_equal(".goodreads.com\tTRUE\t/\tFALSE\t1821801443\tsst-main\tabc",
+            lines[1])
+        assert_equal(".goodreads.com\tTRUE\t/\tFALSE\t1821801443\tccsid\t555-1",
+            lines[2])
+    end)
+
+    it("ignores a missing/empty cookie header", function()
+        assert_equal(0, #NetSurf.netscape_cookie_lines(nil))
+        assert_equal(0, #NetSurf.netscape_cookie_lines(""))
+    end)
+
+    it("writes the cookie jar file", function()
+        local path = "./.netsurf-cookies-test"
+        local e = NetSurf.new{ bin = "/fake", cookie_file = path,
+            runner = fake_runner(4, 3, 9), tmp_dir = "." }
+        e:set_cookies("a=1; b=2", ".goodreads.com", 0)
+        local f = io.open(path, "r")
+        local body = f:read("*a")
+        f:close()
+        os.remove(path)
+        assert_true(body:find("# Netscape HTTP Cookie File", 1, true) ~= nil)
+        assert_true(body:find("goodreads.com\tTRUE\t/\tFALSE\t0\ta\t1", 1, true) ~= nil)
+        assert_true(body:find("goodreads.com\tTRUE\t/\tFALSE\t0\tb\t2", 1, true) ~= nil)
+    end)
+
     it("scrolls by re-invoking the helper", function()
         local e = NetSurf.new{
             bin = "/fake", runner = fake_runner(4, 3, 9), tmp_dir = ".",

@@ -258,8 +258,12 @@ end
 -- Nothing switches engines automatically: the user picks it in Settings.
 function Goodreads:resolveBrowserEngine()
     local Host = require("goodreadskosync.browser.host")
-    return Host.resolve(self:getSetting("browser_engine"),
-        self:getSetting("browser_netsurf_bin"))
+    local bin = self:getSetting("browser_netsurf_bin")
+    if not bin or bin == "" then
+        -- Conventional location for the native helper on the device.
+        bin = "/mnt/us/koreader/goodreadskosync/bin/netsurf_render"
+    end
+    return Host.resolve(self:getSetting("browser_engine"), bin)
 end
 
 function Goodreads:currentMetadata()
