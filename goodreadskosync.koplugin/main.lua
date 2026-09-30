@@ -1039,7 +1039,7 @@ function Goodreads:showDiagnostics()
             tostring(last.ok), tostring(last.stage), tostring(last.error))
     end
     local last_error = self:getSetting("last_sync_error")
-    if last_error then
+    if last_error and last_error ~= "" then
         lines[#lines + 1] = string.format("last_sync_error=%s", tostring(last_error))
     end
     lines[#lines + 1] = "login_log=" .. Storage.getBaseDir() .. "/login.log"

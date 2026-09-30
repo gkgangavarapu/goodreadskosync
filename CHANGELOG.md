@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.25.1] - 2026-10-01
+- Clear the stale `last_sync_error` after a successful sync. It was only ever set on failure, so an old network error lingered in the diagnostics page even after later successful syncs. Now a successful sync clears it (and the diagnostics page treats an empty value as "none").
+
 ### PW3 hardware findings (in progress)
 - Physical PW3 testing reproduces the static ARM helper's failure: every fetch
   scheme returns `about:query/fetcherror` and the process aborts with
