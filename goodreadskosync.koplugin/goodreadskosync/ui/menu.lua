@@ -140,6 +140,10 @@ function Menu:buildMenu()
             },
         },
         {
+            text = _("Browse Goodreads…"),
+            callback = function() self:openGoodreadsBrowser() end,
+        },
+        {
             text = _("Reading"),
             sub_item_table = {
                 {

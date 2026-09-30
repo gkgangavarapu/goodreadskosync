@@ -1081,6 +1081,11 @@ for name, fn in pairs(require("goodreadskosync.ui.reading")) do
     Goodreads[name] = fn
 end
 
+-- On-device Goodreads reader lives in ui/browser.lua.
+for name, fn in pairs(require("goodreadskosync.ui.browser")) do
+    Goodreads[name] = fn
+end
+
 -- Turn a GitHub release body into short plain text for the update prompt.
 function Goodreads:formatReleaseNotes(text)
     if type(text) ~= "string" or text == "" then return nil end

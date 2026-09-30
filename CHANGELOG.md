@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-09-30
+
+Adds a built-in Goodreads reader, so you can browse Goodreads on the device.
+
+- New **Browse Goodreads…** in the main menu: reads pages with your existing sign-in and shows them as clean text, with the page's links listed so you can keep browsing.
+- Navigation: Back / Forward / Reload / Home / Open URL / Close.
+- Covers the server-rendered parts of Goodreads (home, My Books, book pages, reviews, notes, profile, quotes, recommendations…). JavaScript-only screens and forms are not rendered — writing to Goodreads still happens through the plugin's own actions.
+- Nothing is sent anywhere except goodreads.com.
+
 ## [1.17.4] - 2026-09-30
 
 Every change is now saved on the device first and posted in the background, and the last long network burst is gone.
