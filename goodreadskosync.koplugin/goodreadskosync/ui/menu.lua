@@ -86,7 +86,7 @@ function Menu:findOnGoodreadsMenuItems()
 end
 
 function Menu:buildMenu()
-    return {
+    local items = {
         {
             text = _("Sync now"),
             callback = function() self:syncNow() end,
@@ -138,10 +138,6 @@ function Menu:buildMenu()
                     callback = function() self:showStatus() end,
                 },
             },
-        },
-        {
-            text = _("Browse Goodreads…"),
-            callback = function() self:openGoodreadsBrowser() end,
         },
         {
             text = _("Reading"),
@@ -250,6 +246,31 @@ function Menu:buildMenu()
                                 self:openNetSurfBrowser()
                             end,
                         },
+                        {
+                            text = _("Browse page style (dev)"),
+                            sub_item_table = {
+                                {
+                                    text = _("Reader (clean)"),
+                                    radio = true,
+                                    checked_func = function()
+                                        return (self:getSetting("browse_style") or "reader") ~= "site"
+                                    end,
+                                    callback = function()
+                                        self:setSetting("browse_style", "reader")
+                                    end,
+                                },
+                                {
+                                    text = _("Site (inline site CSS)"),
+                                    radio = true,
+                                    checked_func = function()
+                                        return self:getSetting("browse_style") == "site"
+                                    end,
+                                    callback = function()
+                                        self:setSetting("browse_style", "site")
+                                    end,
+                                },
+                            },
+                        },
                     },
                 },
             },
@@ -260,6 +281,18 @@ function Menu:buildMenu()
             callback = function() SupportUI.show() end,
         },
     }
+
+    -- Experimental feature: only offered on the dev update channel, so stable
+    -- builds do not expose it. The code is identical on both branches; this
+    -- gate is what keeps it out of stable.
+    if self:updateChannel() == "dev" then
+        table.insert(items, #items, {
+            text = _("Browse Goodreads (experimental)…"),
+            callback = function() self:openGoodreadsBrowser() end,
+        })
+    end
+
+    return items
 end
 
 return Menu

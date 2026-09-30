@@ -25,7 +25,10 @@ local _ = require("gettext")
 
 local Browser = {}
 
-local HOME = "https://www.goodreads.com/"
+-- My Books, not the root. The Goodreads root "/" is WAF/anti-bot challenged
+-- (it can return HTTP 202 "SIGNIN_BLOCKED"), whereas /review/list is
+-- server-rendered and reliable — the same reason the CSRF fetcher uses it.
+local HOME = "https://www.goodreads.com/review/list"
 
 local function is_goodreads(url)
     return type(url) == "string" and url:match("^https?://[^/]*goodreads%.com") ~= nil
@@ -89,23 +92,13 @@ function Browser:_browseFetch(url)
     return resp.body
 end
 
--- Keep the on-disk image cache bounded (delete oldest beyond `keep`).
+-- Keep the on-disk image cache bounded (delete oldest beyond `keep`). The
+-- logic lives in `Images.prune` (pure, unit-tested); a missing dir is a no-op
+-- so image handling can never fail a page.
 function Browser:_browsePruneImages(dir, keep)
     local ok, lfs = pcall(require, "libs/libkoreader-lfs")
     if not ok or not lfs then return end
-    local files = {}
-    for entry in lfs.dir(dir) do
-        if entry ~= "." and entry ~= ".." then
-            local path = dir .. "/" .. entry
-            local attr = lfs.attributes(path)
-            if attr and attr.mode == "file" then
-                files[#files + 1] = { path = path, t = attr.modification or 0 }
-            end
-        end
-    end
-    if #files <= keep then return end
-    table.sort(files, function(a, b) return a.t < b.t end)
-    for i = 1, #files - keep do os.remove(files[i].path) end
+    Images.prune(dir, keep, lfs)
 end
 
 -- Download the page's images (best effort) and point the HTML at local files,
@@ -115,6 +108,12 @@ function Browser:_browseDownloadImages(html, base)
     if #urls == 0 then return html end
     local dir = Storage.getBaseDir() .. "/browse-img"
     pcall(function() require("ffi/util").makePath(dir) end)
+    local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
+    if not (ok_lfs and lfs and lfs.attributes(dir, "mode") == "directory") then
+        -- No image cache: skip images rather than fail the whole page.
+        Logging.trace("browse: image cache dir unavailable; skipping images")
+        return html
+    end
     local http = Session.to_http(Session.load())
     local map = {}
     for i = 1, math.min(#urls, 8) do
@@ -213,10 +212,21 @@ function Browser:_browseLoad(url, mode)
             local completed, ok, extra = self:runInBackground(_("Loading Goodreads…"), function()
                 local body, err = self:_browseFetch(url)
                 if not body then return false, (err or "fetch") end
-                local css = self:_browseCollectCss(body, url)
-                body = self:_browseDownloadImages(body, url)
+                -- Enrichment is best-effort: a CSS or image failure must never
+                -- fail the page. Fall back to the unenriched HTML.
+                -- Clean reader style by default; the site's modern CSS only
+                -- looks worse on CRE (no flex/grid). "site" is opt-in.
+                local style = self:getSetting("browse_style") or "reader"
+                local css = ""
+                if style == "site" then
+                    local ok_css, c = pcall(self._browseCollectCss, self, body, url)
+                    if ok_css and type(c) == "string" then css = c end
+                end
+                local ok_img, rewritten = pcall(self._browseDownloadImages, self, body, url)
+                if ok_img and type(rewritten) == "string" then body = rewritten end
                 local doc = Render.page(body, url,
-                    { back = back, reload = url, home = HOME }, css)
+                    { back = back, reload = url, home = HOME }, css,
+                    { site_css = (style == "site") })
                 local file = Storage.getBaseDir() .. "/browse-" .. tostring(slot) .. ".html"
                 -- Fresh file and sidecar for this slot.
                 remove_path(file)
@@ -229,8 +239,14 @@ function Browser:_browseLoad(url, mode)
             end)
             if completed == false then return end
             if not ok then
-                Widgets.message(string.format(_("Couldn't load the page (%s)."),
-                    tostring(extra or "?")), 6)
+                local reason = tostring(extra or "?")
+                if reason == "AUTH_REQUIRED" then
+                    Widgets.message(_("Sign in to Goodreads first (Menu → More → Account)."), 7)
+                elseif reason == "SIGNIN_BLOCKED" then
+                    Widgets.message(_("Goodreads blocked this page (anti-bot). Try again, or use My Books. If it persists, sign in again."), 8)
+                else
+                    Widgets.message(string.format(_("Couldn't load the page (%s)."), reason), 6)
+                end
                 return
             end
             local path = extra

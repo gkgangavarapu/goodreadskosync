@@ -35,6 +35,48 @@ describe("browse.images", function()
     end)
 end)
 
+describe("browse.images.prune", function()
+    it("is a no-op for a missing directory (never throws)", function()
+        local fs = {
+            attributes = function() return nil end,
+            dir = function() error("dir() must not be called for a missing dir") end,
+        }
+        assert_equal(0, Images.prune("/no/such/dir", 3, fs))
+    end)
+
+    it("removes the oldest files beyond keep", function()
+        local names = { ".grkprune_a", ".grkprune_b", ".grkprune_c", ".grkprune_d", ".grkprune_e" }
+        local mtime = {
+            [".grkprune_a"] = 1, [".grkprune_b"] = 5, [".grkprune_c"] = 3,
+            [".grkprune_d"] = 2, [".grkprune_e"] = 4,
+        }
+        for _, n in ipairs(names) do
+            local f = io.open(n, "w"); f:write("x"); f:close()
+        end
+        local i = 0
+        local fs = {
+            attributes = function(path, key)
+                if key == "mode" then return "directory" end
+                local n = path:match("([^/]+)$")
+                if mtime[n] then return { mode = "file", modification = mtime[n] } end
+                return nil
+            end,
+            dir = function()
+                return function() i = i + 1; return names[i] end
+            end,
+        }
+        local removed = Images.prune(".", 3, fs)
+        assert_equal(2, removed)
+        local function exists(n) local f = io.open(n, "r"); if f then f:close() return true end return false end
+        assert_false(exists(".grkprune_a"))
+        assert_false(exists(".grkprune_d"))
+        assert_true(exists(".grkprune_b"))
+        assert_true(exists(".grkprune_c"))
+        assert_true(exists(".grkprune_e"))
+        for _, n in ipairs(names) do os.remove(n) end
+    end)
+end)
+
 describe("browser.engine", function()
     local Engine = require("goodreadskosync.browser.engine")
 

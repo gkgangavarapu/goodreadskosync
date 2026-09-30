@@ -31,8 +31,12 @@ local function absolutize(body, host)
     return body
 end
 
--- html, url, nav{ back, reload, home }, extra_css -> full document string
-function Render.page(html, url, nav, extra_css)
+-- html, url, nav{ back, reload, home }, extra_css, opts -> full document string
+-- opts.site_css = false skips the site's own CSS (clean "reader" style; the
+-- default), because CRE cannot render modern flex/grid CSS and the site CSS
+-- applied to a stripped DOM looks broken.
+function Render.page(html, url, nav, extra_css, opts)
+    opts = opts or {}
     html = tostring(html or "")
     local host = (url and url:match("^(https?://[^/]+)")) or "https://www.goodreads.com"
 
@@ -75,12 +79,16 @@ function Render.page(html, url, nav, extra_css)
     title = Util.decodeEntities(title):gsub("%s+", " ")
     title = title:gsub("^%s+", ""):gsub("%s+$", "")
 
-    local site_css = table.concat(inline_css, "\n") .. "\n" .. tostring(extra_css or "")
-    if #site_css > 400000 then site_css = site_css:sub(1, 400000) end
+    local css_head = ""
+    if opts.site_css ~= false then
+        local site_css = table.concat(inline_css, "\n") .. "\n" .. tostring(extra_css or "")
+        if #site_css > 400000 then site_css = site_css:sub(1, 400000) end
+        css_head = "<style>" .. site_css .. "</style>"
+    end
 
     return "<html><head><meta charset='utf-8'><title>" .. title ..
         "</title><style>" .. STYLE .. "</style>" ..
-        "<style>" .. site_css .. "</style></head><body>" ..
+        css_head .. "</head><body>" ..
         navhtml .. body .. "</body></html>"
 end
 

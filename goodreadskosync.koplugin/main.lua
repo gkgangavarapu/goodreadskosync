@@ -66,6 +66,8 @@ local DEFAULT_SETTINGS = {
     support_tips = true,
     -- Toast decoration: "symbols" | "none".
     toast_glyphs = "symbols",
+    -- Browse page style: "reader" (clean, default) | "site" (inline site CSS).
+    browse_style = "reader",
     -- Browser engine: "cre" (default fallback) | "netsurf" (opt-in dev engine).
     -- NetSurf is only used once its helper binary exists at browser_netsurf_bin.
     browser_engine = "cre",

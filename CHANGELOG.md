@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.26.1] - 2026-10-01
+- **Browse Goodreads — crash fix.** If the image cache directory was missing, pruning threw and the whole page failed ("Couldn't load the page"). Pruning is now a safe no-op and image/CSS enrichment can never fail a page. Added a regression test.
+- **Browse Goodreads — better home + messages.** It opens **My Books** (`/review/list`) instead of the anti-bot-challenged root `/`, and shows clearer "sign-in required" / "blocked" messages.
+- **Browse Goodreads is now experimental and dev-channel only** (hidden on stable), labelled "Browse Goodreads (experimental)…".
+- **Reader-style rendering by default** (skips the site's modern CSS, which CRE can't lay out); dev toggle for Site vs Reader style.
+
 ## [1.26.0] - 2026-10-01
 - **Selectable update channel.** Settings, and the main-menu version label, now honour an **Update channel** preference: **Stable** (published releases) or **Dev** (prereleases from the dev branch). The default matches the channel the running build was published on; switching channels changes where "check for updates" (and the daily auto-check) fetches from.
 - Both channels are now published: `v1.26.0` (stable) and `v1.26.0-dev` (dev prerelease).
