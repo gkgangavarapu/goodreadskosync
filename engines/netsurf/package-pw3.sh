@@ -1,10 +1,16 @@
 #!/bin/sh
-# Assemble the PW3 device-test bundle: the renderer, NetSurf resources, a
-# launcher that wires up NETSURFRES, and the smoke test.
+# Build a self-contained PW3 device-test package for the NetSurf helper.
 #
-#   ./package-pw3.sh            # uses out/pw3/netsurf_render
+#   NETSURF_RES=/path/to/netsurf/resources ./package-pw3.sh /path/to/netsurf_render
 #
-# Output: out/pw3/device-test/  (tarred as out/pw3/netsurf_render-pw3.tar.gz)
+# Output: out/pw3/netsurf_render-pw3.tar.gz containing
+#   device-test/netsurf_render   ARM helper
+#   device-test/resources/       NetSurf resources (default.css, ca-bundle, ...)
+#   device-test/run.sh           launcher with deterministic paths
+#   device-test/README.txt       device instructions
+#
+# The package references only files inside itself; there is no dependency on the
+# build tree. A launcher resolves everything relative to its own directory.
 set -eu
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -12,53 +18,76 @@ OUT="$HERE/out/pw3"
 PKG="$OUT/device-test"
 BIN="${1:-$OUT/netsurf_render}"
 
-[ -f "$BIN" ] || { echo "missing $BIN (run build-pw3.sh first)" >&2; exit 1; }
+[ -f "$BIN" ] || { echo "missing helper: $BIN" >&2; echo "usage: NETSURF_RES=... $0 <netsurf_render>" >&2; exit 1; }
 
-RES=""
-for cand in "$HERE/out/pw3/resources" "$HERE/../netsurf-arm/netsurf/resources"; do
-	[ -d "$cand" ] && RES="$cand" && break
-done
+# Locate NetSurf resources (default.css, ca-bundle, Messages, ...).
+RES="${NETSURF_RES:-}"
+if [ -z "$RES" ]; then
+	for cand in "$OUT/resources" "$HERE/resources" \
+	            "$HOME/.cache/netsurf-pw3/netsurf-all-3.11/netsurf/resources" \
+	            "$HOME/.cache/netsurf-kindlepw2/netsurf-all-3.11/netsurf/resources"; do
+		[ -d "$cand" ] && RES="$cand" && break
+	done
+fi
+[ -n "$RES" ] && [ -d "$RES" ] || { echo "NetSurf resources not found; set NETSURF_RES" >&2; exit 1; }
+[ -f "$RES/ca-bundle" ] || { echo "warning: $RES/ca-bundle missing (HTTPS will fail)" >&2; }
 
 rm -rf "$PKG"
 mkdir -p "$PKG"
 install -m 755 "$BIN" "$PKG/netsurf_render"
+cp -a "$RES" "$PKG/resources"
 
-if [ -n "$RES" ]; then
-	cp -a "$RES" "$PKG/resources"
-else
-	echo "warning: NetSurf resources/ not found; the binary needs NETSURFRES at runtime" >&2
-fi
+# Optional: a mime.types improves local-file content typing (NetSurf otherwise
+# falls back to a minimal built-in table).
+for mt in /etc/mime.types /usr/share/mime.types; do
+	[ -f "$mt" ] && cp "$mt" "$PKG/resources/mime.types" && break
+done
 
 cat > "$PKG/run.sh" <<'EOF'
 #!/bin/sh
-# Usage: ./run.sh <url> [out-prefix] [width] [height]
-# The Kindle glibc is old (2.12); keep it simple.
+# Self-contained launcher. Everything is resolved relative to this script.
+#   ./run.sh [url] [out-prefix] [width] [height]
 HERE="$(cd "$(dirname "$0")" && pwd)"
 URL="${1:-https://example.com/}"
 OUT="${2:-/tmp/netsurf-render}"
 W="${3:-600}"
 H="${4:-800}"
+
+# Deterministic runtime/resource paths (no build-tree dependency).
 export NETSURFRES="$HERE/resources"
+export CURL_CA_BUNDLE="$HERE/resources/ca-bundle"
+export SSL_CERT_FILE="$HERE/resources/ca-bundle"
+# Keep per-run scratch files off persistent storage where possible.
+export TMPDIR="${TMPDIR:-/var/tmp}"
+
 exec "$HERE/netsurf_render" --url "$URL" --width "$W" --height "$H" --out "$OUT"
 EOF
 chmod 755 "$PKG/run.sh"
 
 cat > "$PKG/README.txt" <<'EOF'
-NetSurf renderer — PW3 device test
-==================================
-1. Copy this directory to the Kindle, e.g.
-     /mnt/us/koreader/goodreadskosync/netsurf/
-2. Run:
-     /mnt/us/koreader/goodreadskosync/netsurf/run.sh https://example.com/ /tmp/ex
-   -> writes /tmp/ex.pgm and /tmp/ex.json
-3. Measures to record:
-     time ./run.sh https://example.com/ /tmp/ex      # startup + first render
-     /usr/bin/time -v ./run.sh ... (if available)     # peak RSS
-Static ARM binary (armv7-a, soft-float, glibc). No JavaScript. No /dev/fb0.
+NetSurf renderer — PW3 device test bundle
+=========================================
+Contents
+  netsurf_render   - static ARMv7 (armv7-a, soft-float, EABI5, glibc<=2.12) helper
+  resources/       - NetSurf resources (default.css, ca-bundle, Messages, mime.types)
+  run.sh           - launcher; resolves resources relative to this directory
+
+Usage
+  1. Copy this whole directory to the device, e.g.
+       /mnt/us/koreader/goodreadskosync/netsurf/
+  2. Run:
+       ./run.sh https://example.com/ /tmp/ex
+     Writes /tmp/ex.pgm (P5 grayscale) and /tmp/ex.json (title/url/dims/hitmap).
+  3. Point the plugin's browser_netsurf_bin setting at <dir>/netsurf_render.
+
+Notes
+  - No JavaScript. Software-only; never touches /dev/fb0.
+  - The helper exits non-zero after writing output on some glibc versions; the
+    engine still consumes a complete frame.pgm/frame.json (post-output abort).
+  - Record: startup time, first-render time, peak RSS, and page results.
 EOF
 
-echo "== bundle: $PKG =="
-ls -l "$PKG"
+echo "== package: $PKG =="
+ls -l "$PKG" "$PKG/resources" | head -30
 tar -C "$OUT" -czf "$OUT/netsurf_render-pw3.tar.gz" device-test
-echo "== $OUT/netsurf_render-pw3.tar.gz =="
-ls -l "$OUT/netsurf_render-pw3.tar.gz"
+echo "== $OUT/netsurf_render-pw3.tar.gz ($(wc -c < "$OUT/netsurf_render-pw3.tar.gz") bytes) =="

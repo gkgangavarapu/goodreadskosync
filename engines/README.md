@@ -107,5 +107,12 @@ libpng/libjpeg for images).
   tap-to-navigate, back/forward/reload, scrolling, and clean failures for
   invalid URLs. Authenticated Goodreads and PW3 device still pending.
 - PW3 (`kindlepw2`) cross build: produces a correct static ARMv7 soft-float
-  binary; on-device runtime not yet verified.
+  binary. `package-pw3.sh` builds a **self-contained device bundle** (helper +
+  resources + CA bundle + `run.sh`, deterministic paths, verified from a clean
+  directory).
+- **QEMU is not a valid PW3 runtime proxy** with this toolchain — see
+  [`netsurf/QEMU-LIMITATION.md`](netsurf/QEMU-LIMITATION.md). Dynamic glibc 2.12
+  binaries don't run; the static binary executes but NetSurf fetches fail
+  uniformly (even `about:`/`data:`/`file:`) and it aborts post-output. Physical
+  PW3 testing is the next step.
 - Other targets: build configs defined; not built/tested yet.

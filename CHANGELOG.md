@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-10-01
+
+PW3 packaging + helper robustness; QEMU limitation documented.
+
+- The engine now consumes a **complete** `frame.pgm` + `frame.json` even when the
+  helper exits non-zero (post-output abort), recording `helper_exit` in the
+  frame. It still fails cleanly when no usable output exists. Regression tests
+  cover: valid output despite nonzero exit, nonzero exit without output, missing
+  output on a clean exit, corrupt JSON with and without nonzero exit, and the
+  platform IO/quoting helpers.
+- `engines/netsurf/package-pw3.sh` produces a **self-contained** device bundle:
+  static ARM helper + NetSurf `resources/` (incl. `ca-bundle`, and `mime.types`
+  when available) + a launcher that resolves everything relative to itself.
+  Verified from a clean directory (no build-tree dependency).
+- `engines/netsurf/QEMU-LIMITATION.md`: dynamic `kindlepw2` glibc 2.12 binaries
+  don't run under qemu-user; the static binary executes but NetSurf fetches fail
+  uniformly (including `about:`/`data:`/`file:`) and it aborts post-output; the
+  identical frontend works natively on x86_64. QEMU is therefore not a valid
+  proxy for PW3 fetch/runtime validation — physical hardware is required.
+- Tests 233 → 240.
+
 ## [1.24.0] - 2026-10-01
 
 Linux KOReader → Browser Host → NetSurf → bitmap integration (end-to-end).

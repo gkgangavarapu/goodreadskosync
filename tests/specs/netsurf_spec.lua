@@ -230,6 +230,98 @@ describe("browser.host engine factory", function()
     end)
 end)
 
+describe("browser.engines.netsurf helper robustness", function()
+    local function writing_run(w, h, code, opts)
+        opts = opts or {}
+        return function(_, argv)
+            local out = nil
+            for i = 1, #argv do
+                if argv[i] == "--out" then out = argv[i + 1] end
+            end
+            if not opts.no_pgm then
+                local f = io.open(out .. ".pgm", "wb")
+                f:write(string.format("P5\n%d %d\n255\n", w, h))
+                f:write(string.rep("\7", w * h))
+                f:close()
+            end
+            if not opts.no_json then
+                local j = io.open(out .. ".json", "w")
+                j:write(opts.bad_json and "not json"
+                    or string.format('{"url":"u","title":"t","width":%d,"height":%d,"hits":[]}',
+                        w, h))
+                j:close()
+            end
+            return true, "", "", code
+        end
+    end
+
+    it("consumes a valid frame even when the helper exits nonzero", function()
+        local e = NetSurf.new{ bin = "/fake", tmp_dir = ".",
+            platform = Platform.new{ run = writing_run(4, 3, 134) } }
+        assert_true(e:load("https://x/"))
+        local frame = e:render()
+        assert_equal(4, frame.width)
+        assert_equal(134, frame.helper_exit)
+    end)
+
+    it("reports a helper exit when no output was written", function()
+        local e = NetSurf.new{ bin = "/fake", tmp_dir = ".",
+            platform = Platform.new{ run = writing_run(4, 3, 134,
+                { no_pgm = true, no_json = true }) } }
+        local ok, err = e:load("https://x/")
+        assert_nil(ok)
+        assert_true(err:find("helper exit 134", 1, true) ~= nil)
+    end)
+
+    it("reports missing output on a clean exit", function()
+        local e = NetSurf.new{ bin = "/fake", tmp_dir = ".",
+            platform = Platform.new{ run = writing_run(4, 3, 0,
+                { no_pgm = true, no_json = true }) } }
+        local ok, err = e:load("https://x/")
+        assert_nil(ok)
+        assert_equal("missing output files", err)
+    end)
+
+    it("reports bad output for corrupt json", function()
+        local e = NetSurf.new{ bin = "/fake", tmp_dir = ".",
+            platform = Platform.new{ run = writing_run(4, 3, 0, { bad_json = true }) } }
+        local ok, err = e:load("https://x/")
+        assert_nil(ok)
+        assert_equal("bad output", err)
+    end)
+
+    it("reports bad output for corrupt json even on nonzero exit", function()
+        local e = NetSurf.new{ bin = "/fake", tmp_dir = ".",
+            platform = Platform.new{ run = writing_run(4, 3, 134, { bad_json = true }) } }
+        local ok, err = e:load("https://x/")
+        assert_nil(ok)
+        assert_true(err:find("helper exit 134", 1, true) ~= nil)
+    end)
+end)
+
+describe("browser.platform io", function()
+    it("writes, reads, checks and removes files", function()
+        local p = Platform.new()
+        local path = "./.platform-io-test"
+        assert_true(p:write(path, "hello"))
+        assert_true(p:exists(path))
+        assert_equal("hello", p:read(path))
+        p:remove(path)
+        assert_false(p:exists(path))
+        assert_nil(p:read(path))
+    end)
+
+    it("quotes arguments for the shell", function()
+        local seen = nil
+        local p = Platform.new{ run = function(_, argv)
+            seen = argv
+            return true, "", "", 0
+        end }
+        p:run({ "/bin/x", "--url", "https://a/b?c=d&e" })
+        assert_equal("https://a/b?c=d&e", seen[3])
+    end)
+end)
+
 describe("browse.frame", function()
     local Frame = require("goodreadskosync.browse.frame")
 

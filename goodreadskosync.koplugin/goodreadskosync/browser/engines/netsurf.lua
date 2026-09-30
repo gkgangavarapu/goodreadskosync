@@ -159,19 +159,37 @@ function NetSurf:_invoke(url, scroll_y)
     end
     local ok, out, err, code = self.platform:run(argv)
     if not ok then return nil, err or "runner failed" end
-    if code and code ~= 0 then
-        Logging.trace("netsurf: helper failed code=", tostring(code), " out=", tostring(out))
-        return nil, "helper exit " .. tostring(code)
-    end
+    local exited_nonzero = (code ~= nil and code ~= 0)
+
+    -- Consume the output files first: a helper that rendered successfully and
+    -- then aborted *after* writing them (e.g. old glibc at exit) still yields a
+    -- valid frame. Only treat a nonzero exit as a failure when there is no
+    -- usable output.
     local meta_raw = self.platform:read(prefix .. ".json")
     local pgm_raw = self.platform:read(prefix .. ".pgm")
-    if not meta_raw or not pgm_raw then return nil, "missing output files" end
+    if not meta_raw or not pgm_raw then
+        if exited_nonzero then
+            Logging.trace("netsurf: helper exit ", tostring(code), " out=", tostring(out))
+            return nil, "helper exit " .. tostring(code)
+        end
+        return nil, "missing output files"
+    end
     self.platform:remove(prefix .. ".json")
     self.platform:remove(prefix .. ".pgm")
+
     local meta = Json.decode(meta_raw)
-    if type(meta) ~= "table" then return nil, "bad meta json" end
     local pgm = NetSurf.parse_pgm(pgm_raw)
-    if not pgm then return nil, "bad pgm" end
+    if type(meta) ~= "table" or not pgm then
+        if exited_nonzero then
+            return nil, "helper exit " .. tostring(code)
+        end
+        return nil, "bad output"
+    end
+    if exited_nonzero then
+        -- Genuine post-output abort: keep the frame but record the exit code.
+        Logging.trace("netsurf: consumed output despite helper exit ", tostring(code))
+    end
+    meta.helper_exit = code
     meta.width = meta.width or pgm.width
     meta.height = meta.height or pgm.height
     meta.bitmap = pgm.pixels
@@ -214,6 +232,7 @@ function NetSurf:render()
         scroll_h = frame.scroll_h or frame.height,
         scroll_y = frame.scroll_y or self._scroll_y,
         hits = frame.hits,
+        helper_exit = frame.helper_exit,
     }
 end
 
