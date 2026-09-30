@@ -243,6 +243,12 @@ function Menu:buildMenu()
                                     tostring(reason)), 5)
                             end,
                         },
+                        {
+                            text = _("Open NetSurf browser (dev)"),
+                            callback = function()
+                                self:openNetSurfBrowser()
+                            end,
+                        },
                     },
                 },
             },

@@ -100,7 +100,12 @@ libpng/libjpeg for images).
 
 ## Status
 
-- Linux x86_64 NetSurf renderer: working.
+- **Linux x86_64 + KOReader: working end-to-end** —
+  `KOReader -> Browser UI -> Browser Host -> NetSurfEngine -> netsurf_render ->
+  bitmap/hitmap -> KOReader display`. Verified: example.com, gnu.org (CSS),
+  netsurf-browser.org (images), Goodreads book page (cover), HTTPS, hitmap,
+  tap-to-navigate, back/forward/reload, scrolling, and clean failures for
+  invalid URLs. Authenticated Goodreads and PW3 device still pending.
 - PW3 (`kindlepw2`) cross build: produces a correct static ARMv7 soft-float
   binary; on-device runtime not yet verified.
 - Other targets: build configs defined; not built/tested yet.

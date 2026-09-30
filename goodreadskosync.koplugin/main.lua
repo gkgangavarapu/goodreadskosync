@@ -102,6 +102,7 @@ function Goodreads:init()
         self.ui.menu:registerToMainMenu(self)
     end
     self:scheduleTimer()
+    self:_maybeNetSurfSelfTest()
 end
 
 function Goodreads:getSetting(key)
@@ -258,12 +259,112 @@ end
 -- Nothing switches engines automatically: the user picks it in Settings.
 function Goodreads:resolveBrowserEngine()
     local Host = require("goodreadskosync.browser.host")
+    return Host.resolve(self:getSetting("browser_engine"), self:_netsurfBin())
+end
+
+-- Path to the native NetSurf helper (setting, env override, or device default).
+function Goodreads:_netsurfBin()
     local bin = self:getSetting("browser_netsurf_bin")
     if not bin or bin == "" then
-        -- Conventional location for the native helper on the device.
-        bin = "/mnt/us/koreader/goodreadskosync/bin/netsurf_render"
+        bin = os.getenv("GRK_NETSURF_BIN")
+            or "/mnt/us/koreader/goodreadskosync/bin/netsurf_render"
     end
-    return Host.resolve(self:getSetting("browser_engine"), bin)
+    return bin
+end
+
+-- Cookie header for the NetSurf helper. Supplied by the Goodreads integration
+-- layer (env override during headless testing); never touches sync state.
+function Goodreads:_netsurfCookieHeader()
+    local override = os.getenv("GRK_GR_COOKIES")
+    if override and override ~= "" then return override end
+    return nil
+end
+
+-- Open the generic browser view backed by the NetSurf engine. CRE is untouched.
+function Goodreads:openNetSurfBrowser(url)
+    local Host = require("goodreadskosync.browser.host")
+    local Platform = require("goodreadskosync.browser.platform")
+    local NetSurfBrowser = require("goodreadskosync.ui.netsurf_browser")
+    local view = NetSurfBrowser:new{
+        ctx = {
+            engine_name = Host.NETSURF,
+            bin = self:_netsurfBin(),
+            cookie_file = Storage.getBaseDir() .. "/netsurf-cookies.txt",
+            platform = Platform.new(),
+        },
+    }
+    local ok, err = view:load(url or "https://www.goodreads.com/", self:_netsurfCookieHeader())
+    if not ok then
+        Widgets.message(string.format(_("NetSurf unavailable: %s"), tostring(err)), 5)
+        return nil
+    end
+    UIManager:show(view)
+    return view
+end
+
+-- Headless self-test (development only): exercises the full path inside KOReader.
+-- Enabled by GRK_NETSURF_SELFTEST=1; never runs for normal users.
+function Goodreads:_runNetSurfSelfTest()
+    local Host = require("goodreadskosync.browser.host")
+    local Platform = require("goodreadskosync.browser.platform")
+    local NetSurfBrowser = require("goodreadskosync.ui.netsurf_browser")
+    local Frame = require("goodreadskosync.browse.frame")
+    local platform = Platform.new()
+    local url = os.getenv("GRK_NETSURF_URL") or "https://example.com/"
+    local outdir = os.getenv("GRK_NETSURF_OUT") or "/tmp"
+    local function log(...)
+        io.write("SELFTEST ", table.concat({ ... }, " "), "\n")
+    end
+    local resolved, reason = Host.resolve(Host.NETSURF, self:_netsurfBin())
+    log("engine=" .. tostring(resolved) .. " reason=" .. tostring(reason))
+    local view = NetSurfBrowser:new{
+        ctx = {
+            engine_name = Host.NETSURF,
+            bin = self:_netsurfBin(),
+            cookie_file = Storage.getBaseDir() .. "/netsurf-cookies.txt",
+            platform = platform,
+        },
+    }
+    local util = require("ffi/util")
+    local t0 = util.gettime()
+    local ok, err = view:load(url, self:_netsurfCookieHeader())
+    local dt = (util.gettime() - t0) * 1000
+    if not ok then log("load FAILED " .. tostring(err)); os.exit(1) end
+    local f = view.last_frame
+    log(string.format("render title=%q url=%q w=%d h=%d scroll_h=%d hits=%d first_ms=%.0f",
+        tostring(view.title), tostring(view.url), f.width, f.height,
+        view.scroll_h, #view.hits, dt))
+    platform:write(outdir .. "/netsurf-selftest.pgm",
+        Frame.to_pgm(f.width, f.height, f.bitmap))
+    if view.hits[1] then
+        local h = view.hits[1]
+        local before = view.url
+        view:onTap(nil, { pos = { x = h.x + 1, y = h.y + 1 } })
+        log("tap href=" .. tostring(h.href) .. " -> " .. tostring(view.url)
+            .. " changed=" .. tostring(view.url ~= before))
+    end
+    view:goBack()
+    log("back -> " .. tostring(view.url))
+    view:goForward()
+    log("forward -> " .. tostring(view.url))
+    view:reload()
+    log("reload -> " .. tostring(view.url) .. " hits=" .. tostring(#view.hits))
+    if view.engine then
+        view.engine:scroll(0, 200)
+        view:_update()
+        log("scroll scroll_y=" .. tostring(view.scroll_y)
+            .. " scroll_h=" .. tostring(view.scroll_h))
+    end
+    os.exit(0)
+end
+
+function Goodreads:_maybeNetSurfSelfTest()
+    if os.getenv("GRK_NETSURF_SELFTEST") ~= "1" then return end
+    UIManager:scheduleIn(1, function()
+        local ok, err = pcall(function() self:_runNetSurfSelfTest() end)
+        if not ok then io.write("SELFTEST ERROR " .. tostring(err) .. "\n") end
+        os.exit(0)
+    end)
 end
 
 function Goodreads:currentMetadata()

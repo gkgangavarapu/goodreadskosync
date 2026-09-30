@@ -96,4 +96,20 @@ function Host.viewport(w, h, opts)
     }
 end
 
+-- Create an engine instance for a backend. The UI asks the Host for engines
+-- rather than constructing them itself, so engine choice stays in one place.
+-- Returns an engine, or nil+reason when the backend cannot be created (e.g. the
+-- NetSurf helper is missing).
+function Host.create_engine(name, opts)
+    opts = opts or {}
+    if name == Host.NETSURF then
+        if not Host.binary_available(opts.bin) then
+            return nil, "netsurf helper not found"
+        end
+        local NetSurf = require("goodreadskosync.browser.engines.netsurf")
+        return NetSurf.new(opts)
+    end
+    return nil, "unsupported engine: " .. tostring(name)
+end
+
 return Host

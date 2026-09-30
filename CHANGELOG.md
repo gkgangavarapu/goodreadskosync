@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-10-01
+
+Linux KOReader → Browser Host → NetSurf → bitmap integration (end-to-end).
+
+- `ui/netsurf_browser.lua`: a generic browser view that displays a BrowserEngine
+  bitmap through KOReader (BB8 via memcpy), routes taps through the engine
+  hitmap and swipes to engine scrolling, with back/forward/reload. It asks the
+  `Browser Host` for an engine and uses only the `BrowserEngine` contract; CRE is
+  untouched.
+- `Host.create_engine(name, opts)`: the UI never constructs an engine directly.
+- `browse/frame.lua`: pure frame helpers (gray_at, to_pgm, is_valid).
+- `More → Browser engine (dev) → Open NetSurf browser (dev)` entry.
+- Headless self-test hook (`GRK_NETSURF_SELFTEST=1`) exercising the full path
+  inside real KOReader.
+- Verified inside KOReader v2026.07.1 (headless): example.com, gnu.org (CSS),
+  netsurf-browser.org (images), a Goodreads book page (cover shown), HTTPS,
+  hitmap, tap→navigate, back/forward/reload, scrolling; invalid URL fails
+  cleanly. Browsing created no books/`.sdr`/mappings — sync cannot be triggered.
+- Measured (x86_64): example.com ~0.16 s / ~20 MB; Goodreads book page ~25 s /
+  ~139 MB.
+- Docs: `engines/netsurf/LINUX.md` (requirements, helper protocol, lifecycle,
+  measurements).
+- Tests 227 → 233 (Host engine factory, frame helpers, platform).
+
 ## [1.23.0] - 2026-09-30
 
 Platform-independent browser architecture + multi-target build configs.

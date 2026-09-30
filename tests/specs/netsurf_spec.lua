@@ -202,3 +202,54 @@ describe("browser.engines.netsurf", function()
         assert_true(body:find("goodreads.com\tTRUE\t/\tFALSE\t0\ta\t1", 1, true) ~= nil)
     end)
 end)
+
+describe("browser.host engine factory", function()
+    it("refuses NetSurf when the helper is missing", function()
+        local eng, err = Host.create_engine(Host.NETSURF, { bin = "/no/such/bin" })
+        assert_nil(eng)
+        assert_true(err:find("not found", 1, true) ~= nil)
+    end)
+
+    it("creates a contract-compliant NetSurf engine when the helper exists", function()
+        local path = "./.netsurf-fake-bin2"
+        local f = io.open(path, "w"); f:write("#!/bin/sh\n"); f:close()
+        local eng = Host.create_engine(Host.NETSURF, {
+            bin = path,
+            platform = Platform.new{ run = fake_run(4, 3, 9) },
+            viewport = { w = 4, h = 3 },
+        })
+        os.remove(path)
+        assert_true(Engine.validate(eng))
+        assert_equal("netsurf", eng:capabilities().engine)
+    end)
+
+    it("refuses unknown engines", function()
+        local eng, err = Host.create_engine("webview", {})
+        assert_nil(eng)
+        assert_true(err:find("unsupported", 1, true) ~= nil)
+    end)
+end)
+
+describe("browse.frame", function()
+    local Frame = require("goodreadskosync.browse.frame")
+
+    it("reads grayscale bytes and defaults to white", function()
+        local pixels = string.char(0, 128, 255, 64)
+        assert_equal(0, Frame.gray_at(pixels, 2, 0, 0))
+        assert_equal(128, Frame.gray_at(pixels, 2, 1, 0))
+        assert_equal(255, Frame.gray_at(pixels, 2, 0, 1))
+        assert_equal(255, Frame.gray_at(pixels, 2, 9, 9))
+    end)
+
+    it("validates frames", function()
+        assert_true(Frame.is_valid{ width = 2, height = 2, bitmap = string.rep("\0", 4) })
+        assert_false(Frame.is_valid{ width = 2, height = 2, bitmap = "xx" })
+        assert_false(Frame.is_valid(nil))
+    end)
+
+    it("re-encodes to PGM", function()
+        local pgm = Frame.to_pgm(2, 1, string.char(1, 2))
+        assert_true(pgm:find("P5\n2 1\n255\n", 1, true) == 1)
+        assert_equal(2, #pgm - #("P5\n2 1\n255\n"))
+    end)
+end)
