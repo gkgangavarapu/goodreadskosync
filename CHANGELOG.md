@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.4] - 2026-09-30
+
+Fixes the side effects of Browse Goodreads and cleans up the page view.
+
+- Browsed pages are no longer treated as books: sync and matching ignore them, so they create no mappings and trigger no syncs.
+- Uses two reusable page files instead of one per page, and deletes the previous page's file and its `.sdr` folder — nothing accumulates on the device.
+- The page view now drops the site header, footer, nav and forms for a cleaner read.
+
 ## [1.18.3] - 2026-09-30
 
 Update checks now follow the channel you are on.

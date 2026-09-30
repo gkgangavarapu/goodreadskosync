@@ -235,8 +235,18 @@ end
 -- Current document helpers
 --------------------------------------------------------------------------------
 
+-- True when the open document is one of our own "Browse Goodreads" HTML files.
+-- Those are not books: they must never be identified, mapped, or synced.
+function Goodreads:isBrowseDocument()
+    local doc = self.ui and self.ui.document
+    if not doc then return false end
+    local path = doc.file or (doc.getFilePath and doc:getFilePath())
+    if type(path) ~= "string" then return false end
+    return path:lower():find("goodreadskosync/browse", 1, true) ~= nil
+end
+
 function Goodreads:hasDocument()
-    return self.ui and self.ui.document ~= nil
+    return self.ui and self.ui.document ~= nil and not self:isBrowseDocument()
 end
 
 function Goodreads:currentMetadata()
@@ -267,6 +277,7 @@ end
 
 function Goodreads:identifyCurrent(opts)
     opts = opts or {}
+    if self:isBrowseDocument() then return nil end
     if not self:hasDocument() then
         Widgets.message(_("Open a book first."))
         return nil

@@ -29,6 +29,18 @@ local function is_goodreads(url)
     return type(url) == "string" and url:match("^https?://[^/]*goodreads%.com") ~= nil
 end
 
+-- Remove a file, or a directory (KOReader's .sdr sidecar) if it is one.
+local function remove_path(path)
+    if type(path) ~= "string" then return end
+    local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
+    if ok_lfs and lfs and lfs.attributes(path, "mode") == "directory" then
+        local ok_ffi, ffiUtil = pcall(require, "ffi/util")
+        if ok_ffi and ffiUtil and ffiUtil.purgeDir then ffiUtil.purgeDir(path) end
+    else
+        os.remove(path)
+    end
+end
+
 -- Fetch a page with the stored session. Returns body or nil, error.
 -- detect_auth is off: browsing reads arbitrary pages, and the sign-in sniffing
 -- used for write operations gives false positives on normal Goodreads pages.
@@ -99,14 +111,22 @@ function Browser:_browseLoad(url, mode)
     self:setSetting("browse_index", index)
     local back = (index > 1) and history[index - 1] or nil
 
+    -- Reuse two fixed files (alternating) instead of one per page, so KOReader
+    -- does not accumulate "books" and .sdr sidecars while browsing.
+    local slot = (tonumber(self:getSetting("browse_slot")) or 0) + 1
+    if slot > 2 then slot = 1 end
+    self:setSetting("browse_slot", slot)
+
     self:runWhenOnline(function()
         self:runAsync(function()
             local completed, ok, extra = self:runInBackground(_("Loading Goodreads…"), function()
                 local body, err = self:_browseFetch(url)
                 if not body then return false, (err or "fetch") end
                 local doc = Render.page(body, url, { back = back, reload = url, home = HOME })
-                local file = Storage.getBaseDir() .. "/browse-" .. tostring(os.time()) ..
-                    "-" .. tostring(math.random(1000, 9999)) .. ".html"
+                local file = Storage.getBaseDir() .. "/browse-" .. tostring(slot) .. ".html"
+                -- Fresh file and sidecar for this slot.
+                remove_path(file)
+                remove_path(file .. ".sdr")
                 local f = io.open(file, "w")
                 if not f then return false, "write" end
                 f:write(doc)
@@ -120,6 +140,7 @@ function Browser:_browseLoad(url, mode)
                 return
             end
             local path = extra
+            local prev = self:getSetting("browse_prev")
             Logging.trace("browse: rendering ", tostring(path))
             if self.ui and self.ui.showReader then
                 self.ui:showReader(path)
@@ -127,7 +148,14 @@ function Browser:_browseLoad(url, mode)
                 self.ui:openFile(path)
             else
                 Widgets.message(_("Can't open Goodreads here."), 5)
+                return
             end
+            -- Drop the previous slot's file and sidecar once the new page is up.
+            if prev and prev ~= path then
+                remove_path(prev)
+                remove_path(prev .. ".sdr")
+            end
+            self:setSetting("browse_prev", path)
         end)
     end)
 end

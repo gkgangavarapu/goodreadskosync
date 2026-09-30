@@ -44,6 +44,13 @@ function Render.page(html, url, nav)
         :gsub("<svg[^>]*>.-</svg>", "")
         :gsub("<iframe[^>]*>.-</iframe>", "")
         :gsub("<!%-%-.-%-%->", "")
+        -- Drop site chrome so the page reads as an article.
+        :gsub("<header[^>]*>.-</header>", "")
+        :gsub("<footer[^>]*>.-</footer>", "")
+        :gsub("<nav[^>]*>.-</nav>", "")
+        :gsub("<aside[^>]*>.-</aside>", "")
+        :gsub("<form[^>]*>.-</form>", "")
+        :gsub("<button[^>]*>.-</button>", "")
 
     body = absolutize(body, host)
 

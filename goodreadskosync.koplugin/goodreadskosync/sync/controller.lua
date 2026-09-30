@@ -297,6 +297,7 @@ end
 
 function Controller:_syncNow()
     diag("event: syncNow")
+    if self.isBrowseDocument and self:isBrowseDocument() then return end
     if self._sync_busy then
         -- A background sync is already running; fold this into a follow-up.
         self._sync_queued = true
@@ -514,6 +515,7 @@ end
 -- Automatic sync (on open, periodic, resume) with light feedback.
 function Controller:syncSilently(opts)
     opts = opts or {}
+    if self.isBrowseDocument and self:isBrowseDocument() then return end
     diag("syncSilently: force=", tostring(opts.force_remote),
         " doc=", tostring(self:hasDocument()), " online=", tostring(self:isOnline()))
     if not self:hasDocument() then
