@@ -1,0 +1,17 @@
+# Local lint configuration for selene.
+# CI uses luacheck (see .luacheckrc and .github/workflows/ci.yml).
+# The custom standard library in goodreads.yml declares KOReader globals and
+# the test harness DSL.
+std = "goodreads"
+exclude = [
+    "tools/**",
+    "tests/fixtures/**",
+]
+
+[lints]
+# Not part of the project style; luacheck does not flag these either.
+multiple_statements = "allow"
+global_usage = "allow"
+
+[config]
+unused_variable = { allow_unused_self = true }

@@ -1,0 +1,28 @@
+# Vendored portable toolchain (downloaded by tools/setup.ps1)
+/tools/lua51/
+/tools/luajit/
+/tools/linter/
+/tools/selene/
+/tools/*.zip
+
+# Build artifacts
+/dist/
+/build/
+*.koplugin.zip
+goodreadskosync-*.zip
+*.sha256
+
+# Test scratch state
+/tests/.tmp/
+/.goodreads-test/
+
+# Local planning notes (never published)
+/.notes/
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini

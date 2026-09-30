@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 luarocks zip
+          sudo luarocks install luacheck
+
+      - name: Lint
+        continue-on-error: true
+        run: make check LUACHECK=luacheck
+
+      - name: Test
+        run: make test LUA=lua5.1
+
+      - name: Set update channel
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            *-dev) channel=dev ;;
+            *)     channel=stable ;;
+          esac
+          echo "channel=$channel"
+          # Bake the channel into the packaged plugin so it follows the right
+          # release stream (dev -> prereleases, stable -> published releases).
+          sed -i "s/CHANNEL = \"stable\"/CHANNEL = \"$channel\"/" \
+            goodreadskosync.koplugin/goodreadskosync/constants.lua
+          grep 'CHANNEL = ' goodreadskosync.koplugin/goodreadskosync/constants.lua
+
+      - name: Package
+        run: make package
+
+      - name: Checksum
+        run: make checksum
+
+      - name: Build release notes from CHANGELOG
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          version="${version%-dev}"
+          # Print the section for this version, from its "## [x.y.z]" heading
+          # up to the next "## [" heading.
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "Release ${GITHUB_REF_NAME}" > release_notes.md
+          fi
+          echo "----- release_notes.md -----"
+          cat release_notes.md
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          prerelease: ${{ contains(github.ref_name, '-dev') }}
+          files: |
+            dist/goodreadskosync-*.zip
+            dist/goodreadskosync-*.zip.sha256
