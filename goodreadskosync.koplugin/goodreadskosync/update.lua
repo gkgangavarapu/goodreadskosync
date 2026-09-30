@@ -71,21 +71,74 @@ function Update.parse_release(body)
     }
 end
 
--- Returns release info, error.
+-- Pure: build release info from one GitHub release object (from the list API).
+function Update.release_from_table(rel)
+    if type(rel) ~= "table" or not rel.tag_name then return nil end
+    local version = tostring(rel.tag_name):gsub("^v", ""):gsub("%-dev$", "")
+    local zip_url, sha_url
+    for _, asset in ipairs(rel.assets or {}) do
+        local u = asset and asset.browser_download_url
+        if type(u) == "string" then
+            if u:match("%.zip%.sha256$") then sha_url = u
+            elseif u:match("%.zip$") then zip_url = u end
+        end
+    end
+    return {
+        version = version,
+        zip_url = zip_url,
+        sha_url = sha_url,
+        page_url = rel.html_url or PAGE_URL,
+        notes = rel.body,
+    }
+end
+
+-- Returns release info, error. Honours the update channel:
+--   stable -> the latest published (non-prerelease) release
+--   dev    -> the newest release of any kind (dev branch publishes prereleases)
 function Update.check(opts)
     opts = opts or {}
+    local channel = opts.channel or Constants.CHANNEL or "stable"
     local Http = require("goodreadskosync.goodreads.http")
     local http = Http:new{
         base_url = "https://api.github.com",
         transport = opts.transport,
     }
+    local headers = {
+        ["Accept"] = "application/vnd.github+json",
+        ["User-Agent"] = "goodreadskosync",
+    }
+
+    if channel == "dev" then
+        local resp = http:get("https://api.github.com/repos/" .. REPO .. "/releases?per_page=30", {
+            follow = true, detect_auth = false, headers = headers,
+        })
+        if resp.error or not resp.body then
+            return nil, resp.error or Constants.ERROR.NETWORK_ERROR
+        end
+        local ok, Json = pcall(require, "goodreadskosync.goodreads.json")
+        local list = ok and Json and Json.decode_any(resp.body) or nil
+        if type(list) ~= "table" then
+            return nil, Constants.ERROR.INVALID_RESPONSE
+        end
+        local best
+        for i = 1, #list do
+            local rel = list[i]
+            if type(rel) == "table" and not rel.draft then
+                local info = Update.release_from_table(rel)
+                if info and info.zip_url
+                    and (not best or Update.is_newer(info.version, best.version)) then
+                    best = info
+                end
+            end
+        end
+        if not best then return nil, Constants.ERROR.INVALID_RESPONSE end
+        return best, nil
+    end
+
     local resp = http:get(API_URL, {
         follow = true,
         detect_auth = false,
-        headers = {
-            ["Accept"] = "application/vnd.github+json",
-            ["User-Agent"] = "goodreadskosync",
-        },
+        headers = headers,
     })
     if resp.error or not resp.body then
         return nil, resp.error or Constants.ERROR.NETWORK_ERROR

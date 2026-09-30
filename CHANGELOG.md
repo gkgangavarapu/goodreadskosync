@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.3] - 2026-09-30
+
+Update checks now follow the channel you are on.
+
+- A **dev build** (the Version item shows e.g. “1.18.3 (dev)”) offers the newest **dev** release.
+- A **stable build** offers only **stable** releases — dev/pre-release builds never reach stable users.
+- Dev releases are published as pre-releases.
+
 ## [1.18.2] - 2026-09-30
 
 Fixes “Couldn’t load the page” when browsing Goodreads.

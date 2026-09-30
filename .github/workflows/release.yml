@@ -28,6 +28,19 @@ jobs:
       - name: Test
         run: make test LUA=lua5.1
 
+      - name: Set update channel
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            *-dev) channel=dev ;;
+            *)     channel=stable ;;
+          esac
+          echo "channel=$channel"
+          # Bake the channel into the packaged plugin so it follows the right
+          # release stream (dev -> prereleases, stable -> published releases).
+          sed -i "s/CHANNEL = \"stable\"/CHANNEL = \"$channel\"/" \
+            goodreadskosync.koplugin/goodreadskosync/constants.lua
+          grep 'CHANNEL = ' goodreadskosync.koplugin/goodreadskosync/constants.lua
+
       - name: Package
         run: make package
 
@@ -37,6 +50,7 @@ jobs:
       - name: Build release notes from CHANGELOG
         run: |
           version="${GITHUB_REF_NAME#v}"
+          version="${version%-dev}"
           # Print the section for this version, from its "## [x.y.z]" heading
           # up to the next "## [" heading.
           awk -v ver="$version" '
@@ -54,6 +68,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
+          prerelease: ${{ contains(github.ref_name, '-dev') }}
           files: |
             dist/goodreadskosync-*.zip
             dist/goodreadskosync-*.zip.sha256

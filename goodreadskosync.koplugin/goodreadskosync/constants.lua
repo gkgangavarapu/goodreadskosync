@@ -8,7 +8,12 @@ the resolver and sync engine remain usable from unit tests without KOReader.
 --]]
 
 local Constants = {
-    VERSION = "1.18.2",
+    VERSION = "1.18.3",
+
+    -- Update channel. "stable" follows published (non-prerelease) releases;
+    -- "dev" follows dev-branch releases (incl. prereleases). The release
+    -- workflow rewrites this to "dev" for tags ending in "-dev".
+    CHANNEL = "stable",
 
     -- Storage schema version. Bump only alongside a migration function.
     SCHEMA_VERSION = 1,

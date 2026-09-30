@@ -28,4 +28,30 @@ describe("update.is_newer", function()
         assert_true(Update.is_newer("1.0.0", "0.9.9"))
         assert_true(Update.is_newer("0.4.1", "0.4"))
     end)
+
+    it("ignores a -dev suffix", function()
+        assert_true(Update.is_newer("1.18.3-dev", "1.17.4"))
+        assert_false(Update.is_newer("1.18.3", "1.18.3-dev"))
+    end)
+end)
+
+describe("update.release_from_table", function()
+    it("reads the version (stripping v and -dev) and asset URLs", function()
+        local info = Update.release_from_table({
+            tag_name = "v1.18.3-dev",
+            html_url = "https://github.com/x/y/releases/tag/v1.18.3-dev",
+            assets = {
+                { browser_download_url = "https://x/goodreadskosync-1.18.3.zip" },
+                { browser_download_url = "https://x/goodreadskosync-1.18.3.zip.sha256" },
+            },
+        })
+        assert_equal("1.18.3", info.version)
+        assert_true(info.zip_url:match("%.zip$") ~= nil)
+        assert_true(info.sha_url:match("%.zip%.sha256$") ~= nil)
+    end)
+
+    it("returns nil without a tag", function()
+        assert_nil(Update.release_from_table({ assets = {} }))
+        assert_nil(Update.release_from_table(nil))
+    end)
 end)

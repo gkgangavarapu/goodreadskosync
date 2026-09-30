@@ -173,8 +173,13 @@ function Menu:buildMenu()
                     return string.format(
                         _("Update available: %s · tap to update"), available)
                 end
+                local label = Constants.VERSION
+                local channel = Constants.CHANNEL
+                if channel and channel ~= "" and channel ~= "stable" then
+                    label = label .. " (" .. channel .. ")"
+                end
                 return string.format(
-                    _("Version: %s · tap to check for updates"), Constants.VERSION)
+                    _("Version: %s · tap to check for updates"), label)
             end,
             callback = function() self:checkForUpdates(true) end,
         },
