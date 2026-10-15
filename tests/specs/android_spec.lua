@@ -132,3 +132,121 @@ describe("android: device capabilities", function()
         end)
     end)
 end)
+
+-- Everything the plugin keeps on disk has to survive a restart on Android too.
+-- Each case writes through the real module and reads it back with a freshly
+-- loaded instance, so the Android paths, the fallback serializer and the
+-- crypto-degrades-to-plaintext path are all exercised end to end.
+describe("android: plugin state on disk", function()
+    local function sandbox(extra)
+        local opts = { data_dir = AndroidEnv.sandboxDataDir() }
+        for key, value in pairs(extra or {}) do opts[key] = value end
+        return opts
+    end
+
+    local function clean(env)
+        env.require("goodreadskosync.storage").reset()
+    end
+
+    it("round-trips book mappings", function()
+        AndroidEnv.with(sandbox(), function(env)
+            clean(env)
+            local Mappings = env.require("goodreadskosync.mappings")
+            local key = "key=" .. string.rep("ab", 20)
+            assert_true(Mappings.put(key, { goodreads_id = "123", title = "Dune" }))
+
+            local reloaded = env.require("goodreadskosync.mappings")
+            assert_equal(1, reloaded.count())
+            assert_equal("123", reloaded.get(key).goodreads_id)
+        end)
+    end)
+
+    it("round-trips the sync queue", function()
+        AndroidEnv.with(sandbox(), function(env)
+            clean(env)
+            local Queue = env.require("goodreadskosync.sync.queue")
+            assert_true(Queue.enqueue({ operation = "progress", book_id = "k1" }))
+            assert_true(Queue.enqueue({ operation = "shelf", book_id = "k1" }))
+
+            local reloaded = env.require("goodreadskosync.sync.queue")
+            assert_equal(2, reloaded.size())
+        end)
+    end)
+
+    it("round-trips the saved session, plaintext when libcrypto is absent", function()
+        AndroidEnv.with(sandbox(), function(env)
+            clean(env)
+            local Session = env.require("goodreadskosync.auth.session")
+            local saved = Session.mark_valid(Session.new(), {
+                cookies = "_goodreads_session=abc; csrf=def",
+                user_id = "42",
+            })
+            assert_true(Session.save(saved))
+
+            local reloaded = env.require("goodreadskosync.auth.session")
+            local loaded = reloaded.load()
+            assert_equal("valid", loaded.state)
+            assert_equal("_goodreads_session=abc; csrf=def", loaded.cookies)
+            assert_equal("42", loaded.user_id)
+            assert_true(reloaded.is_valid(loaded))
+        end)
+    end)
+
+    it("round-trips remembered credentials", function()
+        AndroidEnv.with(sandbox(), function(env)
+            clean(env)
+            local Credentials = env.require("goodreadskosync.auth.credentials")
+            assert_true(Credentials.save("reader@example.com", "hunter2"))
+
+            local reloaded = env.require("goodreadskosync.auth.credentials")
+            local loaded = reloaded.load()
+            assert_equal("reader@example.com", loaded.email)
+            assert_equal("hunter2", loaded.password)
+            reloaded.clear()
+        end)
+    end)
+end)
+
+describe("android: cover cache", function()
+    it("keeps covers inside the Android data directory", function()
+        AndroidEnv.with(nil, function(env)
+            local Covers = env.require("goodreadskosync.covers")
+            assert_equal(ANDROID_BASE .. "/goodreads-covers", Covers.dir())
+        end)
+    end)
+
+    it("creates the cache directory on demand", function()
+        AndroidEnv.with({ data_dir = AndroidEnv.sandboxDataDir() }, function(env)
+            local Covers = env.require("goodreadskosync.covers")
+            Covers.ensureDir()
+            local probe = io.open(Covers.dir() .. "/probe", "w")
+            assert_not_nil(probe)
+            probe:close()
+            os.remove(Covers.dir() .. "/probe")
+        end)
+    end)
+end)
+
+describe("android: kindle-only code stays put", function()
+    it("refuses to talk to the device when it is not a Kindle", function()
+        AndroidEnv.with(nil, function(env)
+            local NativeKindle = env.require("goodreadskosync.providers.native_kindle")
+            local instance = NativeKindle:new()
+            local available = instance:is_available()
+            assert_false(available)
+            local ok, err = instance:authenticate()
+            assert_false(ok)
+            assert_equal("PROVIDER_UNAVAILABLE", err)
+        end)
+    end)
+
+    it("falls back to the built-in browser when the Kindle helper is absent", function()
+        AndroidEnv.with(nil, function(env)
+            local Host = env.require("goodreadskosync.browser.host")
+            local engine, reason = Host.resolve(
+                "netsurf", "/mnt/us/koreader/goodreadskosync/bin/netsurf_render")
+            assert_equal("cre", engine)
+            assert_equal("netsurf helper not found", reason)
+        end)
+    end)
+end)
