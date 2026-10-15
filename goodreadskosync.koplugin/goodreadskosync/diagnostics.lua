@@ -37,15 +37,19 @@ Diagnostics.CHECKS = {
     "logging",
 }
 
--- Modules every network call goes through. They ship with KOReader (in
--- `common/`), but a build can be missing LuaSec, and without it every https
--- request fails - including login. Probing them turns "login does not work on
--- my device" into a one-line answer.
+-- Modules every https request goes through. They ship with KOReader, but a
+-- build can be missing LuaSec, and without it every https request fails -
+-- including login. Probing them turns "login does not work on my device" into
+-- a one-line answer.
+--
+-- `socketutil` is deliberately not here: the plugin already treats it as
+-- optional (it only tunes timeouts) and it needs KOReader's `ffi/loadlib`
+-- override to load, so requiring it would report a failure where nothing is
+-- broken.
 Diagnostics.TRANSPORT_MODULES = {
     "socket.http",
     "ltn12",
     "ssl.https",
-    "socketutil",
 }
 
 -- Settings that may appear in a report. Anything not listed here (the saved

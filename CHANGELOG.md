@@ -9,7 +9,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Android support, and a report that explains itself.
 
 - **Android is now covered by the test suite.** An emulated Android environment (external-storage data directory, a non-Kindle device, clipboard via the Android bridge, no KOReader `crash.log`) runs in CI, so where the plugin writes its files, which backend it picks and what the doctor reports on a phone are pinned by tests rather than assumed.
-- **Connection doctor: new "Secure connection" check.** It reports whether this device's KOReader has the https modules (LuaSec and friends) every request goes through, and names any that are missing. That is the first thing to look at when sign-in fails on one device but works on another, and it is in the exported report too.
+- **Connection doctor: new "Secure connection" check.** It reports whether this device's KOReader has the modules an https request needs (`ssl.https`/LuaSec, `socket.http`, `ltn12`), and names any that are missing. That is the first thing to look at when sign-in fails on one device but works on another, and it is in the exported report too.
 - **The report says where its files are.** A new "platform" section lists the plugin's data directory, whether a KOReader crash log exists, and the https summary. Android has no `crash.log` (the app logs to logcat), so a report from a phone now says `crash_log=missing` instead of quietly leaving the section out.
 - **Fix: a build without `LuaSettings` no longer breaks storage.** The optional-module probe took the error message from a failed `require` as the module itself, so any KOReader that lacks `LuaSettings` failed on the first settings write instead of falling back to the built-in serializer.
 

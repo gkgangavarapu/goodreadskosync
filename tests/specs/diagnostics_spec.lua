@@ -258,6 +258,12 @@ describe("diagnostics.transportProbe", function()
         assert_equal(#Diagnostics.TRANSPORT_MODULES, #seen)
         assert_equal("socket.http", seen[1])
     end)
+
+    it("leaves out socketutil, which the plugin treats as optional", function()
+        for _i, name in ipairs(Diagnostics.TRANSPORT_MODULES) do
+            assert_true(name ~= "socketutil")
+        end
+    end)
 end)
 
 describe("diagnostics.platformLines", function()
