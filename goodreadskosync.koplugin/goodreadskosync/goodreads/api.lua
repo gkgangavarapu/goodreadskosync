@@ -123,6 +123,16 @@ local function explicit_goodreads_id(query)
     return nil
 end
 
+-- A form autocomplete can never resolve: a book URL or an explicit
+-- "goodreads id N" note. A bare number is deliberately excluded, because it may
+-- also be a title ("1984") that autocomplete resolves to the right book.
+local function explicit_goodreads_link(query)
+    if type(query) ~= "string" then return nil end
+    local Util = require("goodreadskosync.util")
+    local ids = Util.findGoodreadsIds(Util.trim(query))
+    return #ids > 0 and ids[1] or nil
+end
+
 local function decode_entities(s)
     if type(s) ~= "string" then return s end
     return (s:gsub("&amp;", "&"):gsub("&#39;", "'"):gsub("&apos;", "'")
@@ -134,24 +144,40 @@ function Api:search_books(query)
         return {}, nil
     end
     local Http = require("goodreadskosync.goodreads.http")
+
+    -- A book URL or "goodreads id N" is unambiguous, and autocomplete never
+    -- resolves those forms, so skip it and resolve the book directly.
+    local link_id = explicit_goodreads_link(query)
+    if link_id then
+        local book, err = self:get_book(link_id)
+        if book then
+            Logging.diag("search: direct id=", tostring(link_id))
+            return { book }, nil
+        end
+        if err then return nil, err end
+    end
+
     local url = self.base_url .. "/book/auto_complete?format=json&q=" .. Http.urlencode(query)
     local resp = self.http:get(url, { follow = true, detect_auth = false })
-    if resp.error then return nil, resp.error end
 
-    local decoded = Json.decode_any(resp.body)
-    if type(decoded) ~= "table" then
-        return nil, Constants.ERROR.INVALID_RESPONSE
+    local results, failure = {}, nil
+    if resp.error then
+        failure = resp.error
+    else
+        local decoded = Json.decode_any(resp.body)
+        if type(decoded) ~= "table" then
+            failure = Constants.ERROR.INVALID_RESPONSE
+        else
+            for _, item in ipairs(decoded) do
+                results[#results + 1] = normalize_auto_complete(self, item)
+            end
+            results = annotate_query_identifier(results, query)
+        end
     end
 
-    local results = {}
-    for _, item in ipairs(decoded) do
-        results[#results + 1] = normalize_auto_complete(self, item)
-    end
-    results = annotate_query_identifier(results, query)
-
-    -- Autocomplete cannot resolve a Goodreads id or a book URL (it returns an
-    -- empty array for those), so fall back to a direct book lookup. This is a
-    -- fallback only, so all-digit titles ("1984") still search normally.
+    -- Autocomplete returns an empty array for a bare Goodreads id, and can also
+    -- fail outright (e.g. an anti-bot challenge). When the query names an
+    -- explicit id either way, resolve it directly instead of reporting nothing.
     if #results == 0 then
         local id = explicit_goodreads_id(query)
         if id then
@@ -160,28 +186,43 @@ function Api:search_books(query)
                 Logging.diag("search: direct id=", tostring(id))
                 return { book }, nil
             end
-            if err then return nil, err end
+            if not failure then failure = err end
         end
     end
 
+    if #results == 0 and failure then
+        return nil, failure
+    end
     return results, nil
 end
 
--- Author search (public /search?search_type=authors). Derived from contributor
--- links, deduped by author id.
+-- Author search. Goodreads renders /search?search_type=authors on the client
+-- (React) now, so its HTML carries no author data and scraping it always
+-- returned "No matches". The book autocomplete payload embeds each result's
+-- author {id, name}, so derive author candidates from it (deduped by id, kept
+-- in relevance order).
 function Api:search_authors(query)
     if type(query) ~= "string" or query == "" then return {}, nil end
     local Http = require("goodreadskosync.goodreads.http")
-    local url = self.base_url .. "/search?q=" .. Http.urlencode(query) .. "&search_type=authors"
-    local resp = self.http:get(url, { follow = true, detect_auth = true })
+    local url = self.base_url .. "/book/auto_complete?format=json&q=" .. Http.urlencode(query)
+    local resp = self.http:get(url, { follow = true, detect_auth = false })
     if resp.error then return nil, resp.error end
-    local body = resp.body or ""
+    local decoded = Json.decode_any(resp.body)
+    if type(decoded) ~= "table" then
+        return nil, Constants.ERROR.INVALID_RESPONSE
+    end
     local authors, seen = {}, {}
-    for id, name in body:gmatch(
-        'href="https://www.goodreads.com/author/show/(%d+)[^"]*".-ContributorLink__name[^>]*>([^<]+)<') do
-        if not seen[id] then
-            seen[id] = true
-            authors[#authors + 1] = { goodreads_id = id, name = decode_entities(name) }
+    for _, item in ipairs(decoded) do
+        local author = item.author
+        if type(author) == "table" and author.id then
+            local id = tostring(author.id)
+            if not seen[id] then
+                seen[id] = true
+                authors[#authors + 1] = {
+                    goodreads_id = id,
+                    name = decode_entities(author.name or ""),
+                }
+            end
         end
     end
     Logging.diag("search_authors: q=", tostring(query), " n=", #authors)

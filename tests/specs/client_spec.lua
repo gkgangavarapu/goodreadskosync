@@ -16,20 +16,21 @@ local BOOK_HTML_RATED = [[<html><head>
 <script type="application/ld+json">{"@type":"Book","name":"Dune","image":"http://img/dune.jpg","author":[{"@type":"Person","name":"Frank Herbert"}],"aggregateRating":{"ratingValue":4.25,"ratingCount":1234,"reviewCount":56},"description":"<i>A</i> novel","publisher":"Penguin","datePublished":"1965"}</script>
 </head><body></body></html>]]
 
--- Community review cards as server-rendered by Goodreads (per-review stars are
--- JS-filled, so often absent).
--- Recommendations: covers are plain anchors; title/author/rating live inside
--- JS tooltip strings with escaped quotes.
-local AUTHORS_SEARCH = [[<html><body>
-<span class="BookAuthors" data-testid="book-item-contributors"><a class="ContributorLink" href="https://www.goodreads.com/author/show/38550.Brandon_Sanderson"><span class="ContributorLink__name" data-testid="name">Brandon Sanderson</span><span class="ContributorLink__badge">Goodreads Author</span></a></span>
-<a class="ContributorLink" href="https://www.goodreads.com/author/show/123.Jane_Doe"><span class="ContributorLink__name" data-testid="name">Jane Doe</span></a>
-</body></html>]]
+-- Author candidates come from the book autocomplete payload: the /search HTML
+-- page is client-rendered now and carries no author data.
+local AUTHORS_AUTO_COMPLETE = [==[
+[{"bookId":"68428","title":"Mistborn","author":{"id":38550,"name":"Brandon Sanderson"}},
+ {"bookId":"68422","title":"Elantris","author":{"id":38550,"name":"Brandon Sanderson"}},
+ {"bookId":"3","title":"Some Book","author":{"id":123,"name":"Jane Doe"}}]
+]==]
 
 local AUTHOR_PAGE = [[<html><body>
 <a class="bookTitle" href="/book/show/68428.Mistborn">Mistborn: The Final Empire</a>
 <a class="bookTitle" href="/book/show/68429.The_Well_of_Ascension">The Well of Ascension</a>
 </body></html>]]
 
+-- Recommendations: covers are plain anchors; title/author/rating live inside
+-- JS tooltip strings with escaped quotes.
 local RECS_HTML = [[<html><body>
 <a href="/book/show/406235.Giovanni_s_Room"><img alt="Giovanni’s Room" class="bookImage" src="https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1223664870l/406235.jpg" /></a>
 <a href="/book/show/157993.The_Little_Prince"><img alt="The Little Prince" class="bookImage" src="https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/x.jpg" /></a>
@@ -40,6 +41,8 @@ local RECS_HTML = [[<html><body>
 <a href="/recommendations?page=2">Next</a>
 </body></html>]]
 
+-- Community review cards as server-rendered by Goodreads (per-review stars are
+-- JS-filled, so often absent).
 local REVIEWS_HTML = [[<html><body>
 <div class="ReviewsList">
 <article class="ReviewCard" aria-label="Review by Jason">
@@ -114,9 +117,27 @@ describe("goodreads.api", function()
         assert_true(calls[2].url:find("/book/show/17306293", 1, true) ~= nil)
     end)
 
-    it("looks up a Goodreads book URL directly", function()
+    it("falls back to a direct lookup when autocomplete is challenged", function()
         local client, _, calls = client_with({
-            { status = 200, body = "[]" },
+            { status = 202 },
+            { status = 200, body = BOOK_HTML },
+        })
+        local results, err = client:search_books("17306293")
+        assert_nil(err)
+        assert_equal(1, #results)
+        assert_equal("17306293", results[1].goodreads_id)
+        assert_true(calls[2].url:find("/book/show/17306293", 1, true) ~= nil)
+    end)
+
+    it("reports an autocomplete error when the query has no explicit id", function()
+        local client = client_with({ { status = 202 } })
+        local results, err = client:search_books("some title")
+        assert_nil(results)
+        assert_equal(Constants.ERROR.SIGNIN_BLOCKED, err)
+    end)
+
+    it("looks up a Goodreads book URL directly, without autocomplete", function()
+        local client, _, calls = client_with({
             { status = 200, body = BOOK_HTML },
         })
         local results, err = client:search_books(
@@ -124,7 +145,16 @@ describe("goodreads.api", function()
         assert_nil(err)
         assert_equal(1, #results)
         assert_equal("17306293", results[1].goodreads_id)
-        assert_true(calls[2].url:find("/book/show/17306293", 1, true) ~= nil)
+        assert_equal(1, #calls)
+        assert_true(calls[1].url:find("/book/show/17306293", 1, true) ~= nil)
+    end)
+
+    it("resolves an explicit 'goodreads id N' note directly", function()
+        local client, _, calls = client_with({ { status = 200, body = BOOK_HTML } })
+        local results = client:search_books("goodreads id 17306293")
+        assert_equal(1, #results)
+        assert_equal("17306293", results[1].goodreads_id)
+        assert_equal(1, #calls)
     end)
 
     it("keeps an all-digit title as a search, not a Goodreads id", function()
@@ -229,13 +259,15 @@ describe("goodreads.api", function()
         assert_equal("1965", book.published)
     end)
 
-    it("parses author search results", function()
-        local client = client_with({ { status = 200, body = AUTHORS_SEARCH } })
-        local authors = client:search_authors("brandon")
+    it("derives author search results from autocomplete (deduped by id)", function()
+        local client, _, calls = client_with({ { status = 200, body = AUTHORS_AUTO_COMPLETE } })
+        local authors = client:search_authors("brandon sanderson")
         assert_equal(2, #authors)
         assert_equal("38550", authors[1].goodreads_id)
         assert_equal("Brandon Sanderson", authors[1].name)
         assert_equal("123", authors[2].goodreads_id)
+        assert_equal("Jane Doe", authors[2].name)
+        assert_true(calls[1].url:find("/book/auto_complete", 1, true) ~= nil)
     end)
 
     it("parses books by an author", function()

@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-15
+Minor bug fixes.
+
+- **Author search works again.** Goodreads replaced the author search page with a client-side (React) app that returns no author data to a scraper, so it always reported "No matches". Author candidates are now derived from the autocomplete payload, which carries each book's author id and name.
+- **"Find on Goodreads" is more reliable by id or link.** A book link (or `goodreads id N`) is now resolved directly — autocomplete never resolves those forms — and a bare numeric id still falls back to a direct lookup even when the autocomplete request fails or is challenged, instead of reporting an error.
+
 ## [2.0.1] - 2026-10-15
 - **Find on Goodreads now accepts a Goodreads link or numeric ID.** Pasting a book's Goodreads link (for example `https://www.goodreads.com/book/show/17306293-shift`) or typing its numeric ID in "Find manually" now finds the book. Until now those searches reported "No matches found"; searching by title, author or ISBN was unaffected. An all-digit title (like 1984) still searches by title.
 
