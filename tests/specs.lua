@@ -29,4 +29,5 @@ return {
     "specs.presets_spec",
     "specs.shelves_spec",
     "specs.diagnostics_spec",
+    "specs.android_spec",
 }
