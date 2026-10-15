@@ -89,7 +89,10 @@ function Api:get_account()
 end
 
 -- Annotate the first result with the searched identifier so the matcher can
--- treat a direct identifier lookup as a hard match.
+-- treat a direct identifier lookup as a hard match. Only ISBN/ASIN queries are
+-- annotated: autocomplete resolves those to the right book. A numeric query is
+-- deliberately NOT annotated here, because an all-digit title ("1984") would be
+-- mistaken for a Goodreads id and store the wrong book id on the candidate.
 local function annotate_query_identifier(results, query)
     if not results[1] or not query then return results end
     local first = results[1]
@@ -102,10 +105,22 @@ local function annotate_query_identifier(results, query)
         first.isbn10 = Isbn.to10(query)
     elseif Util.isAsin(query:upper()) then
         first.asin = query:upper()
-    elseif query:match("^%d+$") then
-        first.goodreads_id = query
     end
     return results
+end
+
+-- An explicit Goodreads book id: a bare number ("17306293") or a book URL
+-- ("https://www.goodreads.com/book/show/17306293-shift"). Autocomplete does not
+-- resolve these (it returns an empty array), so they are looked up directly.
+local function explicit_goodreads_id(query)
+    if type(query) ~= "string" then return nil end
+    local Util = require("goodreadskosync.util")
+    local trimmed = Util.trim(query)
+    if trimmed == "" then return nil end
+    local ids = Util.findGoodreadsIds(trimmed)
+    if #ids > 0 then return ids[1] end
+    if trimmed:match("^%d+$") then return trimmed end
+    return nil
 end
 
 local function decode_entities(s)
@@ -132,7 +147,24 @@ function Api:search_books(query)
     for _, item in ipairs(decoded) do
         results[#results + 1] = normalize_auto_complete(self, item)
     end
-    return annotate_query_identifier(results, query), nil
+    results = annotate_query_identifier(results, query)
+
+    -- Autocomplete cannot resolve a Goodreads id or a book URL (it returns an
+    -- empty array for those), so fall back to a direct book lookup. This is a
+    -- fallback only, so all-digit titles ("1984") still search normally.
+    if #results == 0 then
+        local id = explicit_goodreads_id(query)
+        if id then
+            local book, err = self:get_book(id)
+            if book then
+                Logging.diag("search: direct id=", tostring(id))
+                return { book }, nil
+            end
+            if err then return nil, err end
+        end
+    end
+
+    return results, nil
 end
 
 -- Author search (public /search?search_type=authors). Derived from contributor

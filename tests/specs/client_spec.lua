@@ -101,6 +101,44 @@ describe("goodreads.api", function()
         assert_equal("9780062316097", results[1].isbn13)
     end)
 
+    it("looks up a bare Goodreads id directly when autocomplete is empty", function()
+        local client, _, calls = client_with({
+            { status = 200, body = "[]" },
+            { status = 200, body = BOOK_HTML },
+        })
+        local results, err = client:search_books("17306293")
+        assert_nil(err)
+        assert_equal(1, #results)
+        assert_equal("17306293", results[1].goodreads_id)
+        assert_equal("Sapiens", results[1].title)
+        assert_true(calls[2].url:find("/book/show/17306293", 1, true) ~= nil)
+    end)
+
+    it("looks up a Goodreads book URL directly", function()
+        local client, _, calls = client_with({
+            { status = 200, body = "[]" },
+            { status = 200, body = BOOK_HTML },
+        })
+        local results, err = client:search_books(
+            "https://www.goodreads.com/book/show/17306293-shift")
+        assert_nil(err)
+        assert_equal(1, #results)
+        assert_equal("17306293", results[1].goodreads_id)
+        assert_true(calls[2].url:find("/book/show/17306293", 1, true) ~= nil)
+    end)
+
+    it("keeps an all-digit title as a search, not a Goodreads id", function()
+        local client, _, calls = client_with({
+            { status = 200, body = [==[
+[{"bookId":"61439040","title":"1984","author":{"name":"George Orwell"}}]
+]==] },
+        })
+        local results = client:search_books("1984")
+        assert_equal(1, #results)
+        assert_equal("61439040", results[1].goodreads_id)
+        assert_equal(1, #calls) -- autocomplete only; no direct id lookup
+    end)
+
     it("parses a book page", function()
         local client = client_with({ { status = 200, body = BOOK_HTML } })
         local book = client:get_book("23692271")

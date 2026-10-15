@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-15
+- **Find on Goodreads now accepts a Goodreads link or numeric ID.** Pasting a book's Goodreads link (for example `https://www.goodreads.com/book/show/17306293-shift`) or typing its numeric ID in "Find manually" now finds the book. Until now those searches reported "No matches found"; searching by title, author or ISBN was unaffected. An all-digit title (like 1984) still searches by title.
+
 ## [1.26.1] - 2026-10-01
 - **Browse Goodreads — crash fix.** If the image cache directory was missing, pruning threw and the whole page failed ("Couldn't load the page"). Pruning is now a safe no-op and image/CSS enrichment can never fail a page. Added a regression test.
 - **Browse Goodreads — better home + messages.** It opens **My Books** (`/review/list`) instead of the anti-bot-challenged root `/`, and shows clearer "sign-in required" / "blocked" messages.

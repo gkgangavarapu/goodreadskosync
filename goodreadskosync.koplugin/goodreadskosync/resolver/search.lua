@@ -17,6 +17,7 @@ local Search = {}
 -- Build the most selective query available for an identity.
 function Search.buildQuery(identity)
     identity = identity or {}
+    if identity.goodreads_id then return tostring(identity.goodreads_id) end
     if identity.isbn13 then return identity.isbn13 end
     if identity.isbn10 then return identity.isbn10 end
     if identity.asin then return identity.asin end

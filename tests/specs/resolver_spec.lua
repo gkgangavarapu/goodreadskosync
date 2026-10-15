@@ -1,4 +1,5 @@
 local Resolver = require("goodreadskosync.resolver.resolver")
+local Search = require("goodreadskosync.resolver.search")
 
 local function fakeProvider(candidates)
     return {
@@ -101,6 +102,15 @@ describe("resolver.resolver", function()
         local result = Resolver.resolve({ metadata = sapiens })
         assert_equal("unidentified", result.status)
         assert_equal("no_provider", result.reason)
+    end)
+
+    it("prefers an explicit Goodreads id for the search query", function()
+        assert_equal("17306293",
+            Search.buildQuery({ goodreads_id = "17306293", title = "Shift" }))
+        assert_equal("9780062316097",
+            Search.buildQuery({ isbn13 = "9780062316097", title = "Sapiens" }))
+        assert_equal("Shift Hugh Howey",
+            Search.buildQuery({ title = "Shift", primary_author = "Hugh Howey" }))
     end)
 
     it("builds a persistent mapping record", function()

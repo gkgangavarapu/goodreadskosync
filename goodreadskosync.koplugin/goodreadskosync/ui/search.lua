@@ -19,7 +19,7 @@ function SearchUI.manual(on_submit)
     local dialog
     dialog = InputDialog:new{
         title = _("Find book on Goodreads"),
-        description = _("Enter a title, author, ISBN, or Goodreads ID."),
+        description = _("Enter a title, author, ISBN, Goodreads ID, or link."),
         input = "",
         buttons = { {
             {
