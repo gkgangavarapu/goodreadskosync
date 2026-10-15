@@ -6,7 +6,10 @@ key kept in a separate settings file. This stops secrets from sitting in
 cleartext in a settings file that might be shared for support, but it is NOT
 protection against someone with full filesystem access (KOReader has no OS
 keystore). Every function degrades to nil when libcrypto is unavailable, so
-callers can fall back to plaintext.
+callers can fall back to plaintext - which is what happens on Android, where no
+reachable library exports the OpenSSL symbols (the system libcrypto is outside
+the app's linker namespace). Degrading must never raise: a throw here used to
+abort the login after Goodreads had already accepted it.
 
 @module koplugin.goodreads.crypto_util
 --]]
@@ -42,6 +45,17 @@ local function ensure_cdef()
     ]])
 end
 
+-- A library handle is only usable when the symbols we declared actually resolve.
+-- It can load and still export none of them: on Android nothing reachable
+-- exports RAND_bytes/EVP_* (the system libcrypto is outside the app's linker
+-- namespace), and every call would raise. Probing once turns that into "no
+-- crypto" instead of an error escaping the login.
+local function usable(lib)
+    if not lib then return false end
+    local ok = pcall(function() return lib.EVP_aes_256_cbc() end)
+    return ok
+end
+
 local function get_libcrypto()
     if libcrypto ~= nil then return libcrypto or nil end
     if not ffi then
@@ -52,13 +66,14 @@ local function get_libcrypto()
         ensure_cdef()
         return ffi.loadlib("crypto", "57")
     end)
-    libcrypto = (ok and result) and result or false
+    libcrypto = (ok and usable(result)) and result or false
     return libcrypto or nil
 end
 
 local function random_bytes(lib, n)
     local buf = ffi.new("unsigned char[?]", n)
-    if lib.RAND_bytes(buf, n) ~= 1 then return nil end
+    local ok, rc = pcall(function() return lib.RAND_bytes(buf, n) end)
+    if not ok or rc ~= 1 then return nil end
     return ffi.string(buf, n)
 end
 
@@ -166,13 +181,20 @@ end
 function CryptoUtil.encryptSecret(plaintext)
     local key = CryptoUtil.getOrCreateKey()
     if not key then return nil end
-    return CryptoUtil.aesEncrypt(plaintext, key)
+    -- Belt and braces: a symbol that resolves in the probe can still fail here,
+    -- and nothing in this module may raise - a failed encryption means "store
+    -- it in plaintext", never "the login could not be saved".
+    local ok, blob = pcall(CryptoUtil.aesEncrypt, plaintext, key)
+    if not ok or type(blob) ~= "string" then return nil end
+    return blob
 end
 
 function CryptoUtil.decryptSecret(blob_hex)
     local key = CryptoUtil.getOrCreateKey()
     if not key then return nil end
-    return CryptoUtil.aesDecrypt(blob_hex, key)
+    local ok, plain = pcall(CryptoUtil.aesDecrypt, blob_hex, key)
+    if not ok or type(plain) ~= "string" then return nil end
+    return plain
 end
 
 -- "Encrypt if possible, otherwise plaintext" convenience: returns a value and

@@ -31,4 +31,5 @@ return {
     "specs.diagnostics_spec",
     "specs.android_spec",
     "specs.fs_spec",
+    "specs.crypto_spec",
 }
