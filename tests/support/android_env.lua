@@ -140,6 +140,7 @@ function AndroidEnv.install(opts)
         package.loaded[name] = nil
     end
     for _i, name in ipairs(RELOAD_MODULES) do
+        saved_loaded[name] = package.loaded[name]
         package.loaded[name] = nil
     end
 
@@ -177,7 +178,10 @@ function AndroidEnv.uninstall()
         package.loaded[name] = saved_loaded[name]
     end
     for _i, name in ipairs(RELOAD_MODULES) do
-        package.loaded[name] = nil
+        -- Hand the pre-emulation instance back rather than leaving the cache
+        -- empty, so a later spec cannot accidentally build a fresh instance
+        -- without the test runner's base-dir override.
+        package.loaded[name] = saved_loaded[name]
     end
 end
 
