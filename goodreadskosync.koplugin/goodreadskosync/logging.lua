@@ -9,6 +9,7 @@ when `logger` is not available (e.g. under the unit test runner).
 --]]
 
 local Constants = require("goodreadskosync.constants")
+local Fs = require("goodreadskosync.fs")
 
 local Logging = {}
 
@@ -108,13 +109,7 @@ local function append_trace(line)
     local file = io.open(path, "a")
     if not file then
         local dir = path:match("^(.*)[/\\][^/\\]*$")
-        if dir then
-            if os.getenv("OS") ~= nil then
-                os.execute('mkdir "' .. dir:gsub("/", "\\") .. '" 2>nul')
-            else
-                os.execute('mkdir -p "' .. dir .. '" 2>/dev/null')
-            end
-        end
+        if dir then Fs.makeDir(dir) end
         file = io.open(path, "a")
     end
     if file then

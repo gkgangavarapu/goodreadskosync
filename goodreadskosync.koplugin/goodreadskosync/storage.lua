@@ -10,6 +10,7 @@ serializer keeps the module usable from the unit test suite.
 --]]
 
 local Constants = require("goodreadskosync.constants")
+local Fs = require("goodreadskosync.fs")
 local Logging = require("goodreadskosync.logging")
 
 local Storage = {}
@@ -25,9 +26,6 @@ if not ok_ls or type(LuaSettings) ~= "table"
     or type(LuaSettings.open) ~= "function" then
     LuaSettings = nil
 end
-
--- Windows is only used for the offline test suite; KOReader devices are Linux.
-local IS_WINDOWS = os.getenv("OS") ~= nil
 
 --------------------------------------------------------------------------------
 -- Fallback serializer
@@ -135,12 +133,7 @@ function Store:flush()
 end
 
 function Store:_writeFile()
-    local dir = self.dir
-    if IS_WINDOWS then
-        os.execute('mkdir "' .. dir:gsub("/", "\\") .. '" 2>nul')
-    else
-        os.execute('mkdir -p "' .. dir .. '" 2>/dev/null')
-    end
+    Fs.makeDir(self.dir)
     local tmp = self.path .. ".tmp"
     local file = io.open(tmp, "w")
     if not file then

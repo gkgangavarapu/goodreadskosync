@@ -30,4 +30,5 @@ return {
     "specs.shelves_spec",
     "specs.diagnostics_spec",
     "specs.android_spec",
+    "specs.fs_spec",
 }

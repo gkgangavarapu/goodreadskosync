@@ -9,6 +9,8 @@ separated from I/O so it can be unit tested.
 @module koplugin.goodreads.covers
 --]]
 
+local Fs = require("goodreadskosync.fs")
+
 local Covers = {}
 
 local function deps()
@@ -27,13 +29,9 @@ end
 function Covers.ensureDir(dir)
     local Storage = deps()
     dir = dir or (Storage.getBaseDir() .. "/goodreads-covers")
-    -- `mkdir -p` via os.execute is what the storage layer uses and is reliable
-    -- on Kindle/busybox; ffi/util.makePath is kept as a best-effort fallback.
-    local ok, ffiutil = pcall(require, "ffi/util")
-    if ok and ffiutil and ffiutil.makePath then
-        pcall(ffiutil.makePath, dir)
-    end
-    pcall(os.execute, 'mkdir -p "' .. dir .. '" 2>/dev/null')
+    -- Same directory creation as the storage layer: KOReader's own makePath
+    -- first, so nothing on Android depends on a shell and `mkdir` on PATH.
+    Fs.makeDir(dir)
     return dir
 end
 
