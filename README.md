@@ -114,7 +114,7 @@ Install **Storefront** on your device and install **Goodreads KO Sync** from its
 - **Android:** `/sdcard/koreader/plugins/`
 - **Linux / macOS:** `~/.config/koreader/plugins/`
 
-Kindle is tested. Other platforms may work but are less tested.
+Kindle is tested on real hardware. Android is covered by an emulated-Android test suite (paths, backend selection, diagnostics) but has not been verified on a phone. Other platforms may work but are less tested.
 
 ## Support & Feedback
 
@@ -122,7 +122,7 @@ Found a bug or have a feature request?
 
 **[Open an issue on GitHub](https://github.com/gkgangavarapu/goodreadskosync/issues)**.
 
-Please include a diagnostic report: open the plugin's **Menu** tab, then **Diagnostics > Export diagnostic log**. It writes a single file (path shown on screen) into the plugin's settings folder — `koreader/settings/goodreadskosync/` over USB — with your connection checks, settings and recent activity, and no credentials.
+Please include a diagnostic report: open the plugin's **Menu** tab, then **Diagnostics > Export diagnostic log**. It writes a single file (path shown on screen) into the plugin's settings folder — `koreader/settings/goodreadskosync/` over USB — with your connection checks, settings and recent activity, and no credentials. On Android the same file lands under `/sdcard/koreader/settings/goodreadskosync/`, and the report says when a KOReader crash log is absent (Android has none).
 
 If you enjoy using the plugin, the best way to support continued development is:
 
