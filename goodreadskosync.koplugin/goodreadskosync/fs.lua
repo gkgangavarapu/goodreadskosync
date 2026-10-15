@@ -1,11 +1,12 @@
 --[[--
 Filesystem helper: directory creation that does not depend on a shell.
 
-KOReader ships `ffi/util.makePath` (plain FFI, no shell) on every platform, and
-that is what the plugin prefers: creating the plugin's own settings folder on
-Android must not assume a working shell and `mkdir` on `PATH`. The shell command
-stays as the fallback so the offline test suite - and any unusual build - still
-works.
+KOReader ships a recursive mkdir at `util.makePath`, in the **frontend** util
+module - `ffi/util` has `realpath`, `dirname`, `purgeDir` and friends but no
+`makePath`. The plugin prefers it: creating the plugin's own settings folder on
+Android should not have to assume a working shell and `mkdir` on `PATH`. The
+shell command stays as the fallback so the offline test suite - and any unusual
+build - still works.
 
 @module koplugin.goodreads.fs
 --]]
@@ -17,11 +18,11 @@ local Fs = {}
 function Fs.makeDir(dir)
     if type(dir) ~= "string" or dir == "" then return false end
 
-    local ok, ffiutil = pcall(require, "ffi/util")
-    if ok and ffiutil and type(ffiutil.makePath) == "function" then
-        -- `makePath` returns true (or nil) on success and false on failure;
-        -- only fall through to the shell when it reports failure.
-        local called, done = pcall(ffiutil.makePath, dir)
+    local ok, util = pcall(require, "util")
+    if ok and type(util) == "table" and type(util.makePath) == "function" then
+        -- `makePath` returns true on success and false on failure; only fall
+        -- through to the shell when it reports failure.
+        local called, done = pcall(util.makePath, dir)
         if called and done ~= false then return true end
     end
 

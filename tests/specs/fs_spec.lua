@@ -1,15 +1,15 @@
 local Fs = require("goodreadskosync.fs")
 
--- Run `fn` with a fake `ffi/util` installed, so the KOReader path can be
+-- Run `fn` with a fake frontend `util` installed, so the KOReader path can be
 -- exercised off-device. The real module is restored afterwards.
 local function with_makepath(makePath, fn)
-    local saved_preload = package.preload["ffi/util"]
-    local saved_loaded = package.loaded["ffi/util"]
-    package.preload["ffi/util"] = function() return { makePath = makePath } end
-    package.loaded["ffi/util"] = nil
+    local saved_preload = package.preload["util"]
+    local saved_loaded = package.loaded["util"]
+    package.preload["util"] = function() return { makePath = makePath } end
+    package.loaded["util"] = nil
     local ok, err = pcall(fn)
-    package.preload["ffi/util"] = saved_preload
-    package.loaded["ffi/util"] = saved_loaded
+    package.preload["util"] = saved_preload
+    package.loaded["util"] = saved_loaded
     if not ok then error(err, 0) end
 end
 
@@ -23,7 +23,7 @@ describe("fs.makeDir", function()
         os.remove(dir .. "/probe")
     end)
 
-    it("prefers KOReader's ffi/util.makePath when it is available", function()
+    it("prefers KOReader's util.makePath when it is available", function()
         local asked = {}
         local dir = "/storage/emulated/0/koreader/settings/goodreadskosync"
         with_makepath(function(path)
