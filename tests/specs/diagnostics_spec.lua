@@ -222,6 +222,34 @@ describe("diagnostics.buildReport", function()
     end)
 end)
 
+describe("diagnostics.absolutePath", function()
+    it("joins a relative path onto the working directory", function()
+        assert_equal("/mnt/us/koreader/settings/goodreadskosync/login.log",
+            Diagnostics.absolutePath("./settings/goodreadskosync/login.log",
+                "/mnt/us/koreader"))
+    end)
+
+    it("keeps an absolute path untouched", function()
+        assert_equal("/tmp/report.txt",
+            Diagnostics.absolutePath("/tmp/report.txt", "/mnt/us/koreader"))
+    end)
+
+    it("does not double the separator when the directory ends in one", function()
+        assert_equal("/mnt/us/koreader/crash.log",
+            Diagnostics.absolutePath("./crash.log", "/mnt/us/koreader/"))
+    end)
+
+    it("leaves the path alone when there is no working directory", function()
+        assert_equal("./crash.log", Diagnostics.absolutePath("./crash.log", nil))
+        assert_equal("./crash.log", Diagnostics.absolutePath("./crash.log", "relative"))
+    end)
+
+    it("handles empty and nil input", function()
+        assert_nil(Diagnostics.absolutePath(nil, "/mnt/us/koreader"))
+        assert_equal("", Diagnostics.absolutePath("", "/mnt/us/koreader"))
+    end)
+end)
+
 describe("diagnostics.fileName", function()
     it("is a timestamped text file", function()
         local name = Diagnostics.fileName(os.time({ year = 2026, month = 10, day = 15,

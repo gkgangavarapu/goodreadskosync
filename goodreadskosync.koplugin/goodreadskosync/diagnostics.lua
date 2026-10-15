@@ -289,6 +289,19 @@ function Diagnostics.timestamp(now)
     return os.date("%Y-%m-%d %H:%M:%S", now or os.time())
 end
 
+-- Make a path absolute so it is usable in a report or on screen. KOReader's
+-- data directory is relative on some setups (it is "." on Kindle, resolved
+-- against the process working directory), which tells a reader nothing. Pure:
+-- the caller supplies the working directory.
+function Diagnostics.absolutePath(path, cwd)
+    if not path or path == "" then return path end
+    if path:sub(1, 1) == "/" then return path end
+    if not cwd or cwd == "" or cwd:sub(1, 1) ~= "/" then return path end
+    local relative = path:gsub("^%./", "")
+    if cwd:sub(-1) == "/" then return cwd .. relative end
+    return cwd .. "/" .. relative
+end
+
 -- Stable, sortable file name for an exported report.
 function Diagnostics.fileName(now)
     return "goodreads-diagnostics-" .. os.date("%Y%m%d-%H%M%S", now or os.time()) .. ".txt"

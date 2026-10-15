@@ -129,6 +129,33 @@ local function crashLogPath()
     return nil
 end
 
+-- KOReader's data directory is relative on some setups (it is "." on Kindle,
+-- resolved against the process working directory), which makes for a useless
+-- path in a report the user has to find over USB. Resolve the working directory
+-- once and use it to make every path we show absolute.
+local working_dir
+local working_dir_done = false
+
+local function workingDirectory()
+    if working_dir_done then return working_dir end
+    working_dir_done = true
+    local ok, ffiutil = pcall(require, "ffi/util")
+    if ok and ffiutil and type(ffiutil.realpath) == "function" then
+        local got, resolved = pcall(ffiutil.realpath, ".")
+        if got and resolved and resolved:sub(1, 1) == "/" then
+            working_dir = resolved
+            return working_dir
+        end
+    end
+    local pwd = os.getenv("PWD")
+    if pwd and pwd:sub(1, 1) == "/" then working_dir = pwd end
+    return working_dir
+end
+
+local function absolute(path)
+    return Diagnostics.absolutePath(path, workingDirectory())
+end
+
 local function redacted(lines)
     local out = {}
     for _i, line in ipairs(lines or {}) do
@@ -226,6 +253,16 @@ local function showExportResult(path, bytes, summary)
         width_factor = 0.9,
     }
     UIManager:show(dialog)
+end
+
+-- Absolute plugin data directory: holds login.log and the exported reports.
+function DiagnosticsUI:_diagnosticsDir()
+    return absolute(Storage.getBaseDir())
+end
+
+-- Absolute path of the plugin's trace log, for reports and the status summary.
+function DiagnosticsUI:diagnosticLogPath()
+    return self:_diagnosticsDir() .. "/login.log"
 end
 
 -- Snapshot everything the checks and the report need. All reads are local and
@@ -335,7 +372,7 @@ function DiagnosticsUI:_reportText(ctx, checks, now)
     }
     local summary = Diagnostics.buildReport(header, sections)
 
-    local log_path = Storage.getBaseDir() .. "/login.log"
+    local log_path = self:diagnosticLogPath()
     local log_tail = Diagnostics.tailFile(log_path, LOG_TAIL_BYTES, LOG_TAIL_LINES)
     if log_tail and log_tail ~= "" then
         sections[#sections + 1] = {
@@ -344,7 +381,7 @@ function DiagnosticsUI:_reportText(ctx, checks, now)
             lines = { Logging.redact(log_tail) },
         }
     end
-    local crash_path = crashLogPath()
+    local crash_path = absolute(crashLogPath())
     local crash_tail = crash_path
         and Diagnostics.tailFile(crash_path, CRASH_TAIL_BYTES, CRASH_TAIL_LINES)
     if crash_tail and crash_tail ~= "" then
@@ -373,7 +410,7 @@ function DiagnosticsUI:exportDiagnostics()
     self:_withLiveSession(ctx, function()
         local checks = Diagnostics.evaluate(ctx)
         local summary, full = self:_reportText(ctx, checks, now)
-        local path = Storage.getBaseDir() .. "/" .. Diagnostics.fileName(now)
+        local path = self:_diagnosticsDir() .. "/" .. Diagnostics.fileName(now)
         local file = io.open(path, "w")
         if not file then
             Widgets.message(_("Could not save the report."), 5, "warn")

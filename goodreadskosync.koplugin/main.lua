@@ -1058,7 +1058,7 @@ function Goodreads:showDiagnostics()
     if last_error and last_error ~= "" then
         lines[#lines + 1] = string.format("last_sync_error=%s", tostring(last_error))
     end
-    lines[#lines + 1] = "login_log=" .. Storage.getBaseDir() .. "/login.log"
+    lines[#lines + 1] = "login_log=" .. self:diagnosticLogPath()
     UIManager:show(InfoMessage:new{
         text = table.concat(lines, "\n"),
         timeout = 20,
