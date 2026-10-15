@@ -15,7 +15,16 @@ local Logging = require("goodreadskosync.logging")
 local Storage = {}
 
 local base_dir_override = nil
-local LuaSettings = select(2, pcall(require, "luasettings"))
+
+-- LuaSettings is used when KOReader provides it; otherwise the fallback
+-- serializer below keeps the module usable. Note the shape check: a failed
+-- `pcall` returns an error *string*, which is truthy, so testing the value
+-- alone would make every `Storage.open` blow up on a build without it.
+local ok_ls, LuaSettings = pcall(require, "luasettings")
+if not ok_ls or type(LuaSettings) ~= "table"
+    or type(LuaSettings.open) ~= "function" then
+    LuaSettings = nil
+end
 
 -- Windows is only used for the offline test suite; KOReader devices are Linux.
 local IS_WINDOWS = os.getenv("OS") ~= nil
