@@ -28,4 +28,5 @@ return {
     "specs.shelf_cache_spec",
     "specs.presets_spec",
     "specs.shelves_spec",
+    "specs.diagnostics_spec",
 }

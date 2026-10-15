@@ -89,6 +89,7 @@ pages, on-device caching, and manual refresh.
 - **Sync presets** — Fastest, Faster, Medium, or Relaxed, to balance freshness against battery use.
 - **Manual controls** — Sync now (works with or without a book open), change status, rate books, and find books on Goodreads.
 - **Diagnostic logging** — Optional, off by default, for troubleshooting.
+- **Built-in diagnostics** — A connection doctor, plus a one-tap "Export diagnostic log" that bundles your checks, settings and recent activity into a single file you can attach to a bug report.
 - **OTA updates** — Download and install plugin updates directly from KOReader.
 - **No telemetry** — No analytics or tracking.
 
@@ -120,6 +121,8 @@ Kindle is tested. Other platforms may work but are less tested.
 Found a bug or have a feature request?
 
 **[Open an issue on GitHub](https://github.com/gkgangavarapu/goodreadskosync/issues)**.
+
+Please include a diagnostic report: open the plugin's **Menu** tab, then **Diagnostics > Export diagnostic log**. It writes a single file (path shown on screen) into the plugin's settings folder — `koreader/settings/goodreadskosync/` over USB — with your connection checks, settings and recent activity, and no credentials.
 
 If you enjoy using the plugin, the best way to support continued development is:
 

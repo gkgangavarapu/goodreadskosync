@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- **Connection doctor.** "Menu > Diagnostics > Connection doctor" checks the network, the Goodreads backend, your sign-in and saved session, pending syncs, the device clock and diagnostic logging, then tells you what to do about anything it flags.
+- **Export diagnostic log.** One tap writes a single report file into the plugin's settings folder - the checks, your settings, recent activity and the latest KOReader crash log - so it can be copied off over USB and attached to a bug report. Passwords, cookies and session tokens are never included; the summary can also be copied to the clipboard.
+
 ## [2.0.2] - 2026-10-15
 Minor bug fixes.
 

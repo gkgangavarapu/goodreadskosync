@@ -1232,6 +1232,11 @@ for name, fn in pairs(require("goodreadskosync.ui.browser")) do
     Goodreads[name] = fn
 end
 
+-- Connection doctor + diagnostic-log export live in ui/diagnostics.lua.
+for name, fn in pairs(require("goodreadskosync.ui.diagnostics")) do
+    Goodreads[name] = fn
+end
+
 -- Turn a GitHub release body into short plain text for the update prompt.
 function Goodreads:formatReleaseNotes(text)
     if type(text) ~= "string" or text == "" then return nil end

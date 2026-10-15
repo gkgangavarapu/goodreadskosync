@@ -163,6 +163,27 @@ function Menu:buildMenu()
             callback = function() self:testConnection() end,
         },
         {
+            -- Everything needed to diagnose or report a problem, in one place:
+            -- a live check-up, a shareable report file, and the short status
+            -- summary. Kept at the top level (not under More) so it is easy to
+            -- find when something is wrong.
+            text = _("Diagnostics"),
+            sub_item_table = {
+                {
+                    text = _("Connection doctor"),
+                    callback = function() self:runConnectionDoctor() end,
+                },
+                {
+                    text = _("Export diagnostic log"),
+                    callback = function() self:exportDiagnostics() end,
+                },
+                {
+                    text = _("Sync status"),
+                    callback = function() self:showDiagnostics() end,
+                },
+            },
+        },
+        {
             -- Tapping the version checks GitHub for a newer release; when one is
             -- known the label tells the user to tap to update.
             text_func = function()
@@ -193,8 +214,8 @@ function Menu:buildMenu()
                     text = _("Settings"),
                     sub_item_table_func = function() return SettingsUI.build(self) end,
                 },
-                { text = _("Sync status"), callback = function() self:showDiagnostics() end },
-                { text = _("Waiting to sync"), callback = function() self:showQueue() end },
+                {
+                    text = _("Waiting to sync"), callback = function() self:showQueue() end },
                 {
                     text = _("Retry failed syncs"),
                     callback = function() self:retryFailedSyncs() end,
