@@ -27,6 +27,7 @@ Diagnostics.STATUS = {
 -- a translated name and remedy hints.
 Diagnostics.CHECKS = {
     "network",
+    "transport",
     "provider",
     "account",
     "session",
@@ -34,6 +35,17 @@ Diagnostics.CHECKS = {
     "queue",
     "clock",
     "logging",
+}
+
+-- Modules every network call goes through. They ship with KOReader (in
+-- `common/`), but a build can be missing LuaSec, and without it every https
+-- request fails - including login. Probing them turns "login does not work on
+-- my device" into a one-line answer.
+Diagnostics.TRANSPORT_MODULES = {
+    "socket.http",
+    "ltn12",
+    "ssl.https",
+    "socketutil",
 }
 
 -- Settings that may appear in a report. Anything not listed here (the saved
@@ -99,6 +111,26 @@ function Diagnostics.sessionCheck(ok, err)
         "validate_session: " .. tostring(err or "unknown"))
 end
 
+-- Probe the modules every https request goes through. `require_fn` is injected
+-- so the mapping is testable off-device; on-device it is the real `require`.
+-- Returns { ok = <bool>, detail = <string>, missing = { <module>, ... } }.
+function Diagnostics.transportProbe(require_fn)
+    require_fn = require_fn or require
+    local missing = {}
+    for _i, name in ipairs(Diagnostics.TRANSPORT_MODULES) do
+        local ok = pcall(require_fn, name)
+        if not ok then missing[#missing + 1] = name end
+    end
+    if #missing == 0 then
+        return { ok = true, detail = "https modules loaded", missing = missing }
+    end
+    return {
+        ok = false,
+        detail = "missing: " .. table.concat(missing, ","),
+        missing = missing,
+    }
+end
+
 -- Build the ordered checks from a snapshot. See ui/diagnostics.lua for the
 -- fields; everything is optional so a partial snapshot still renders.
 function Diagnostics.evaluate(ctx)
@@ -110,6 +142,12 @@ function Diagnostics.evaluate(ctx)
         checks[#checks + 1] = check("network", S.FAIL, "offline")
     else
         checks[#checks + 1] = check("network", S.OK, "online")
+    end
+
+    if ctx.transport then
+        local t = ctx.transport
+        checks[#checks + 1] = check("transport", t.ok and S.OK or S.FAIL,
+            t.detail or (t.ok and "https modules loaded" or "https modules missing"))
     end
 
     if not ctx.provider_id then
@@ -269,7 +307,26 @@ function Diagnostics.settingsLines(settings, allowlist)
     return out
 end
 
--- Assemble the report text from a header and titled sections.
+-- Where the plugin keeps its files, and whether the device's own crash log is
+-- present. On Android there is no KOReader `crash.log` (the app logs to
+-- logcat), so a report that says "missing" explains itself instead of looking
+-- like a broken export.
+function Diagnostics.platformLines(ctx)
+    ctx = ctx or {}
+    local crash = "unknown"
+    if ctx.crash_log_found ~= nil then
+        crash = ctx.crash_log_found and "found" or "missing"
+    end
+    local lines = {
+        "data_dir=" .. Logging.redact(ctx.data_dir or "unknown"),
+        "crash_log=" .. crash,
+    }
+    if ctx.transport and ctx.transport.detail then
+        lines[#lines + 1] = "https=" .. tostring(ctx.transport.detail)
+    end
+    return lines
+end
+
 function Diagnostics.buildReport(header_lines, sections)
     local out = {}
     for _i, line in ipairs(header_lines or {}) do

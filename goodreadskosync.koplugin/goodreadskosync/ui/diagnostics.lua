@@ -48,6 +48,10 @@ local function checkLabels()
             name = _("Network"),
             hints = { fail = _("Turn on Wi-Fi and run the doctor again.") },
         },
+        transport = {
+            name = _("Secure connection"),
+            hints = { fail = _("This KOReader build is missing its https modules, so the plugin cannot reach Goodreads.") },
+        },
         provider = {
             name = _("Goodreads backend"),
             hints = { fail = _("The Goodreads backend could not be loaded; reinstall the plugin.") },
@@ -129,6 +133,18 @@ local function crashLogPath()
     return nil
 end
 
+-- Whether this device has a KOReader crash log at all. Android does not: the
+-- app writes to logcat, so the report should say the file is absent instead of
+-- leaving a reader wondering whether the export broke.
+local function crashLogExists()
+    local path = crashLogPath()
+    if not path then return false end
+    local file = io.open(path, "r")
+    if not file then return false end
+    file:close()
+    return true
+end
+
 -- KOReader's data directory is relative on some setups (it is "." on Kindle,
 -- resolved against the process working directory), which makes for a useless
 -- path in a report the user has to find over USB. Resolve the working directory
@@ -183,7 +199,7 @@ local function showChecks(plugin, checks)
         "",
         Diagnostics.formatChecks(checks, checkLabels()),
         "",
-        _("The exported report includes your recent activity and the KOReader crash log."),
+        _("The exported report adds your recent activity and any KOReader crash log."),
         _("Tap \"Export report\" to save it to a file you can attach to a bug report."),
     }, "\n")
 
@@ -291,6 +307,9 @@ function DiagnosticsUI:_diagnosticsContext()
         clock_text = os.date("%Y-%m-%d %H:%M", now),
         koreader_version = koreaderVersion(),
         device = deviceModel(),
+        data_dir = self:_diagnosticsDir(),
+        crash_log_found = crashLogExists(),
+        transport = Diagnostics.transportProbe(),
     }
 end
 
@@ -365,6 +384,7 @@ function DiagnosticsUI:_reportText(ctx, checks, now)
             lines = { Diagnostics.formatChecks(checks, nil, { compact = true }) },
         },
         { title = "plugin state", lines = self:_stateLines(ctx) },
+        { title = "platform", lines = Diagnostics.platformLines(ctx) },
         {
             title = "settings (allow-listed; no secrets are included)",
             lines = Diagnostics.settingsLines(self:_settingsSnapshot()),

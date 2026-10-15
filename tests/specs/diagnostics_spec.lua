@@ -20,6 +20,7 @@ local function healthy(extra)
         logging_enabled = true,
         clock_year = 2026,
         clock_text = "2026-10-15 23:00",
+        transport = { ok = true, detail = "https modules loaded" },
     }
     for key, value in pairs(extra or {}) do ctx[key] = value end
     return ctx
@@ -103,6 +104,27 @@ describe("diagnostics.evaluate", function()
     it("warns when diagnostic logging is off", function()
         local checks = Diagnostics.evaluate(healthy{ logging_enabled = false })
         assert_equal(Diagnostics.STATUS.WARN, find(checks, "logging").status)
+    end)
+
+    it("passes the transport check when the https modules load", function()
+        local checks = Diagnostics.evaluate(healthy())
+        assert_equal(Diagnostics.STATUS.OK, find(checks, "transport").status)
+        assert_true(find(checks, "transport").detail:find("loaded", 1, true) ~= nil)
+    end)
+
+    it("fails the transport check when the https modules are missing", function()
+        local checks = Diagnostics.evaluate(healthy{
+            transport = { ok = false, detail = "missing: ssl.https" },
+        })
+        assert_equal(Diagnostics.STATUS.FAIL, find(checks, "transport").status)
+        assert_true(find(checks, "transport").detail:find("ssl.https", 1, true) ~= nil)
+        assert_equal(Diagnostics.STATUS.FAIL,
+            Diagnostics.verdict(Diagnostics.counts(checks)))
+    end)
+
+    it("omits the transport check from a partial snapshot", function()
+        local checks = Diagnostics.evaluate{ online = true }
+        assert_nil(find(checks, "transport"))
     end)
 
     it("includes the live session result when one was run", function()
@@ -208,6 +230,68 @@ describe("diagnostics.settingsLines", function()
 
     it("skips unset keys", function()
         assert_equal(0, #Diagnostics.settingsLines({}))
+    end)
+end)
+
+describe("diagnostics.transportProbe", function()
+    it("passes when every https module loads", function()
+        local probe = Diagnostics.transportProbe(function() return {} end)
+        assert_true(probe.ok)
+        assert_equal(0, #probe.missing)
+        assert_true(probe.detail:find("loaded", 1, true) ~= nil)
+    end)
+
+    it("lists the modules a broken build is missing", function()
+        local probe = Diagnostics.transportProbe(function(name)
+            if name == "ssl.https" then error("not found") end
+            return {}
+        end)
+        assert_true(probe.ok == false)
+        assert_equal(1, #probe.missing)
+        assert_equal("ssl.https", probe.missing[1])
+        assert_true(probe.detail:find("missing: ssl.https", 1, true) ~= nil)
+    end)
+
+    it("checks every module the plugin needs", function()
+        local seen = {}
+        Diagnostics.transportProbe(function(name) seen[#seen + 1] = name; return {} end)
+        assert_equal(#Diagnostics.TRANSPORT_MODULES, #seen)
+        assert_equal("socket.http", seen[1])
+    end)
+end)
+
+describe("diagnostics.platformLines", function()
+    it("reports the data directory and a present crash log", function()
+        local lines = Diagnostics.platformLines{
+            data_dir = "/mnt/us/koreader/settings/goodreadskosync",
+            crash_log_found = true,
+        }
+        assert_true(table.concat(lines, "\n"):find(
+            "crash_log=found", 1, true) ~= nil)
+    end)
+
+    it("says the crash log is missing on Android", function()
+        local lines = Diagnostics.platformLines{
+            data_dir = "/storage/emulated/0/koreader/settings/goodreadskosync",
+            crash_log_found = false,
+        }
+        local text = table.concat(lines, "\n")
+        assert_true(text:find("crash_log=missing", 1, true) ~= nil)
+        assert_true(text:find("/storage/emulated/0/koreader", 1, true) ~= nil)
+    end)
+
+    it("says unknown when the crash log was not probed", function()
+        local lines = Diagnostics.platformLines{ data_dir = "/koreader" }
+        assert_true(table.concat(lines, "\n"):find("crash_log=unknown", 1, true) ~= nil)
+    end)
+
+    it("adds the https summary when the transport was probed", function()
+        local lines = Diagnostics.platformLines{
+            data_dir = "/koreader",
+            transport = { ok = false, detail = "missing: ssl.https" },
+        }
+        assert_true(table.concat(lines, "\n"):find(
+            "https=missing: ssl.https", 1, true) ~= nil)
     end)
 end)
 
