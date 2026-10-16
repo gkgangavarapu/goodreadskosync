@@ -117,7 +117,7 @@ Prominent banners always use KOReader's built-in icons.]]),
         },
         {
             text = _("Support reminders"),
-            help_text = _("Show a small reminder about supporting the project after a sync, at most once every two weeks."),
+            help_text = _("Show an occasional reminder about supporting the project after a sync."),
             checked_func = checked("support_tips"),
             callback = toggle("support_tips"),
         },

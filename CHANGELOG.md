@@ -279,9 +279,6 @@ The menu is tidier: the everyday actions stay up front, and the rest moved under
 - **Find manually** — and the "Couldn't link this book" screen — open the same prompt for a title, author, ISBN, or Goodreads ID.
 - The separate "Enter ISBN", "Enter Goodreads ID", and "Change linked book" entries were removed since they all did the same thing, and the book-status screen's "Change book" now uses the same prompt.
 
-**Support**
-- After a successful sync, a small, non-intrusive reminder about supporting the project appears at most once every two weeks. Turn it off in **More → Settings → Support reminders**.
-
 ## [1.13.5] - 2026-09-23
 
 Reverted the recent toast styling experiments so notifications render exactly like before. The fix that stopped a sync notification from failing to appear is kept, and toasts still show the book name in two words with what changed.
