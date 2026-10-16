@@ -1701,10 +1701,27 @@ function Goodreads:addToMainMenu(menu_items)
     -- Menu tab, so nothing is lost.
     menu_items.goodreads = {
         text_func = function()
-            if Auth.is_authenticated() then
-                return _("Goodreads KO Sync")
+            local label = Auth.is_authenticated()
+                and _("Goodreads KO Sync")
+                or _("Goodreads KO Sync — sign in")
+            -- Show how fresh the data is, so the entry doubles as a status line.
+            local at = tonumber(self:getSetting("last_sync_at"))
+            if at then
+                local elapsed = os.time() - at
+                if elapsed < 60 then
+                    label = label .. " · " .. _("synced just now")
+                elseif elapsed < 3600 then
+                    label = label .. " · " .. string.format(_("synced %d min ago"),
+                        math.floor(elapsed / 60))
+                elseif elapsed < 24 * 3600 then
+                    label = label .. " · " .. string.format(_("synced %d h ago"),
+                        math.floor(elapsed / 3600))
+                else
+                    label = label .. " · " .. string.format(_("synced %d days ago"),
+                        math.floor(elapsed / (24 * 3600)))
+                end
             end
-            return _("Goodreads KO Sync — sign in")
+            return label
         end,
         sorting_hint = "tools",
         callback = function()

@@ -587,6 +587,7 @@ function Controller:syncSilently(opts)
             -- A successful sync clears any stale error from a previous failure.
             self:setSetting("last_sync_error", "")
             self:setSetting("last_sync_error_at", 0)
+            self:setSetting("last_sync_at", os.time())
             self:maybePromptRating(summary)
             self:maybeSupportReminder()
         end
@@ -652,6 +653,7 @@ function Controller:_reportSyncSummary(summary)
     if summary.ok then
         self:setSetting("last_sync_error", "")
         self:setSetting("last_sync_error_at", 0)
+        self:setSetting("last_sync_at", os.time())
         if summary.changed then
             Widgets.banner(self:_syncToast(summary), { kind = "success", timeout = 5 })
         elseif summary.already_read then
