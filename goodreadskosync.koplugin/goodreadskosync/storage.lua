@@ -208,18 +208,38 @@ end
 
 function Storage.setBaseDir(dir)
     base_dir_override = dir
+    Storage.clearCache()
+end
+
+-- Opened stores are cached per path. Every `open()` used to read and parse the
+-- file again, and the hot paths - sync state on each progress tick, mappings on
+-- each page turn, the queue while draining - opened theirs constantly, which is
+-- pure filesystem work on a slow device. `clearCache()` is for tests that need
+-- the next open to come from disk (nothing else changes these files behind us).
+local open_cache = {}
+
+function Storage.clearCache()
+    open_cache = {}
 end
 
 function Storage.open(name)
     local path = Storage.getBaseDir() .. "/" .. name .. ".lua"
+    local cached = open_cache[path]
+    if cached then return cached end
+
+    local store
     if LuaSettings and not base_dir_override then
-        return luasettings_store(path)
+        store = luasettings_store(path)
+    else
+        store = fallback_store(path)
     end
-    return fallback_store(path)
+    open_cache[path] = store
+    return store
 end
 
 -- Test helper: remove every storage file and reset the override.
 function Storage.reset()
+    Storage.clearCache()
     local dir = Storage.getBaseDir()
     local names = {
         Constants.STORAGE.ACCOUNT,

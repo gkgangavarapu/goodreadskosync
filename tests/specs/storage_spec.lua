@@ -9,11 +9,39 @@ describe("storage", function()
         store:set("nested", { a = 1, b = { "x", "y" } })
         assert_true(store:flush())
 
+        -- Drop the cache so the reload genuinely comes from the file.
+        Storage.clearCache()
         local reopened = Storage.open("settings")
         assert_equal(300, reopened:get("sync_interval"))
         local nested = reopened:get("nested")
         assert_equal(1, nested.a)
         assert_equal("y", nested.b[2])
+    end)
+
+    it("reuses the opened store instead of re-reading the file", function()
+        Storage.setBaseDir("./tests/.tmp/storage")
+        Storage.reset()
+        assert_true(Storage.open("settings") == Storage.open("settings"))
+        -- ... but a fresh store after clearCache.
+        local first = Storage.open("settings")
+        Storage.clearCache()
+        assert_false(first == Storage.open("settings"))
+    end)
+
+    it("re-reads from disk after clearCache", function()
+        Storage.setBaseDir("./tests/.tmp/storage")
+        Storage.reset()
+        Storage.open("settings"):set("from_disk", "written by the test")
+        Storage.open("settings"):flush()
+
+        -- Simulate another writer touching the file behind the cache's back.
+        Storage.clearCache()
+        local path = "./tests/.tmp/storage/settings.lua"
+        local file = io.open(path, "r")
+        assert_not_nil(file)
+        local disk = file:read("*a")
+        file:close()
+        assert_true(disk:find("written by the test", 1, true) ~= nil)
     end)
 
     it("returns the default for a missing key", function()
