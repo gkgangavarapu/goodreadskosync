@@ -109,17 +109,40 @@ function Widgets.confirm(text, on_ok, ok_text)
     })
 end
 
+-- A label that lets editions be told apart. Autocomplete gives us a title,
+-- authors and page count, plus an identifier when the search query itself
+-- carried one, so that is what we show - a bare title is not enough when several
+-- editions share it.
 function Widgets.formatCandidate(candidate, index)
     local authors = candidate.authors
     if type(authors) == "table" then authors = table.concat(authors, ", ") end
     authors = authors or candidate.author or ""
-    local year = candidate.publication_year and (" (" .. candidate.publication_year .. ")") or ""
     local prefix = index and ("[" .. index .. "] ") or ""
     local label = string.format("%s%s", prefix, candidate.title or _("Untitled"))
     if authors ~= "" then label = label .. "\n" .. authors end
-    label = label .. year
+
+    local details = {}
+    if candidate.publication_year then
+        details[#details + 1] = tostring(candidate.publication_year)
+    end
+    if candidate.pages then
+        details[#details + 1] = string.format(_("%d pages"), candidate.pages)
+    end
+    if candidate.isbn13 then
+        details[#details + 1] = "ISBN " .. candidate.isbn13
+    elseif candidate.isbn10 then
+        details[#details + 1] = "ISBN " .. candidate.isbn10
+    elseif candidate.asin then
+        details[#details + 1] = "ASIN " .. candidate.asin
+    end
+    if candidate.has_identifier_match then
+        details[#details + 1] = _("matches this book")
+    end
     if candidate.score then
-        label = label .. string.format("  -  %d%%", candidate.score)
+        details[#details + 1] = string.format("%d%%", candidate.score)
+    end
+    if #details > 0 then
+        label = label .. "\n" .. table.concat(details, " · ")
     end
     return label
 end

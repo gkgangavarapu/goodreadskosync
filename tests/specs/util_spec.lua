@@ -108,6 +108,23 @@ describe("util.normalization", function()
         assert_equal("sapiens", Util.titleCore("Sapiens: A Brief History"))
     end)
 
+    it("strips a Goodreads series parenthetical", function()
+        assert_equal("dune", Util.titleCore("Dune (Dune, #1)"))
+        assert_equal("the hobbit", Util.titleCore("The Hobbit (The Lord of the Rings, #0)"))
+    end)
+
+    it("strips an 'or' alternate title", function()
+        assert_equal("the hobbit", Util.titleCore("The Hobbit, or There and Back Again"))
+    end)
+
+    it("leaves a plain title alone", function()
+        assert_equal("dune", Util.titleCore("Dune"))
+    end)
+
+    it("keeps the title when stripping would empty it", function()
+        assert_equal("(dune, #1)", Util.titleCore("(Dune, #1)"))
+    end)
+
     it("splits multiple authors", function()
         local list = Util.splitAuthors("Yuval Noah Harari")
         assert_equal(1, #list)

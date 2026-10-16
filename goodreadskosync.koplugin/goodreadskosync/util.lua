@@ -108,11 +108,21 @@ function Util.normalizeTitle(title)
 end
 
 -- The core title with any subtitle removed, used as a softer matching signal.
+-- Goodreads decorates autocomplete titles with series and subtitle detail -
+-- "Dune (Dune, #1)", "Sapiens: A Brief History of Humankind", "The Hobbit, or
+-- There and Back Again" - so strip the parenthetical, the ": subtitle" and the
+-- ", or ..." forms before comparing. Unlike `normalizeTitle` this is only ever
+-- a matching hint, never part of a stored key, so it is free to be lossy.
 function Util.titleCore(title)
     local normalized = Util.normalizeTitle(title)
-    local core = normalized:match("^([^:]+):") or normalized
+    local core = normalized:gsub("%s*%b()", "")
+    core = core:match("^([^:]+):") or core
     core = core:match("^([^%|]+)%|") or core
-    return Util.trim(core)
+    core = core:match("^(.+), or ") or core
+    core = Util.trim(core)
+    -- A title that is nothing but a parenthetical must not vanish.
+    if core == "" then return normalized end
+    return core
 end
 
 function Util.normalizeAuthor(author)

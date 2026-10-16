@@ -14,6 +14,20 @@ local Util = require("goodreadskosync.util")
 
 local Search = {}
 
+-- The title/author query. Also the fallback when an identifier query finds
+-- nothing: the identifier may not be indexed by Goodreads (or may belong to an
+-- edition its autocomplete does not return), and a title search still finds the
+-- work so the user can pick the right edition.
+function Search.buildTitleQuery(identity)
+    identity = identity or {}
+    local title = Util.trim(identity.title or "")
+    local author = Util.trim(identity.primary_author or "")
+    if title ~= "" and author ~= "" then
+        return title .. " " .. author
+    end
+    return title
+end
+
 -- Build the most selective query available for an identity.
 function Search.buildQuery(identity)
     identity = identity or {}
@@ -21,12 +35,7 @@ function Search.buildQuery(identity)
     if identity.isbn13 then return identity.isbn13 end
     if identity.isbn10 then return identity.isbn10 end
     if identity.asin then return identity.asin end
-    local title = Util.trim(identity.title or "")
-    local author = Util.trim(identity.primary_author or "")
-    if title ~= "" and author ~= "" then
-        return title .. " " .. author
-    end
-    return title
+    return Search.buildTitleQuery(identity)
 end
 
 function Search.cacheKey(query)
@@ -87,6 +96,33 @@ function Search.clearCache()
     store:flush()
 end
 
+-- Run one query, consulting and updating the cache. Returns candidates or
+-- nil, error.
+local function query_provider(provider, query, opts)
+    if not opts.no_cache then
+        local cached = Search.getCached(query, opts.now)
+        if cached then
+            Logging.diag("search: cache hit query=", tostring(query),
+                " candidates=", tostring(#cached))
+            return cached
+        end
+    end
+
+    local ok, candidates, err = pcall(provider.search_books, provider, query)
+    if not ok then
+        return nil, Constants.ERROR.PROVIDER_UNAVAILABLE
+    end
+    if not candidates then
+        return nil, err or Constants.ERROR.INVALID_RESPONSE
+    end
+    Logging.diag("search: query=", tostring(query), " candidates=", tostring(#candidates))
+
+    if not opts.no_cache then
+        Search.putCached(query, candidates, opts.now)
+    end
+    return candidates
+end
+
 -- Query a provider, consulting and updating the cache. Returns
 -- candidates, query, error.
 function Search.findCandidates(provider, identity, opts)
@@ -96,27 +132,26 @@ function Search.findCandidates(provider, identity, opts)
         return nil, query, Constants.ERROR.INVALID_REQUEST
     end
 
-    if not opts.no_cache then
-        local cached = Search.getCached(query, opts.now)
-        if cached then
-            Logging.diag("search: cache hit query=", tostring(query),
-                " candidates=", tostring(#cached))
-            return cached, query
+    local candidates, err = query_provider(provider, query, opts)
+    if not candidates then
+        return nil, query, err
+    end
+
+    -- An identifier query that returned nothing does not mean the book is
+    -- absent: fall back to title/author so the user still gets editions to pick
+    -- from, instead of "no matches". Never overrides an explicit query.
+    if #candidates == 0 and not opts.query then
+        local fallback = Search.buildTitleQuery(identity)
+        if fallback ~= "" and fallback ~= query then
+            Logging.diag("search: no results for ", tostring(query),
+                ", trying ", tostring(fallback))
+            local more = query_provider(provider, fallback, opts)
+            if more and #more > 0 then
+                return more, fallback
+            end
         end
     end
 
-    local ok, candidates, err = pcall(provider.search_books, provider, query)
-    if not ok then
-        return nil, query, Constants.ERROR.PROVIDER_UNAVAILABLE
-    end
-    if not candidates then
-        return nil, query, err or Constants.ERROR.INVALID_RESPONSE
-    end
-    Logging.diag("search: query=", tostring(query), " candidates=", tostring(#candidates))
-
-    if not opts.no_cache then
-        Search.putCached(query, candidates, opts.now)
-    end
     return candidates, query
 end
 

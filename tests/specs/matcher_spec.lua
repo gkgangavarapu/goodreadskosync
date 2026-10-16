@@ -82,4 +82,91 @@ describe("resolver.matcher", function()
         })
         assert_nil(Matcher.bestAutomatic(ranked))
     end)
+
+    it("is unambiguous when the file's ISBN pins the edition", function()
+        local ranked = Matcher.rank(identity(), {
+            candidate(),
+            candidate({ isbn13 = false, goodreads_id = "999" }),
+        })
+        assert_true(ranked[1].has_identifier_match)
+        assert_true(Matcher.unambiguous(ranked))
+    end)
+
+    it("is ambiguous when two editions of one work tie", function()
+        local ranked = Matcher.rank(identity({ isbn13 = false }), {
+            candidate({ isbn13 = false, goodreads_id = "1" }),
+            candidate({ isbn13 = false, goodreads_id = "2" }),
+        })
+        assert_equal(2, #ranked)
+        assert_equal(1, #Matcher.sameWorkEditions(ranked))
+        assert_false(Matcher.unambiguous(ranked))
+    end)
+
+    it("is ambiguous when a competing edition is close behind", function()
+        -- Same work, different years: the file's year lifts one by only 10 points.
+        local ranked = Matcher.rank(
+            identity({ isbn13 = false, publication_year = 2015 }), {
+                candidate({ isbn13 = false, goodreads_id = "1", publication_year = 2015 }),
+                candidate({ isbn13 = false, goodreads_id = "2", publication_year = 2005 }),
+            })
+        assert_true(ranked[1].score > ranked[2].score)
+        assert_true(ranked[1].score - ranked[2].score < 15)
+        assert_equal(1, #Matcher.sameWorkEditions(ranked))
+        assert_false(Matcher.unambiguous(ranked))
+    end)
+
+    it("is unambiguous when the best stands clearly ahead and is alone", function()
+        local ranked = Matcher.rank(identity({ isbn13 = false }), {
+            candidate({ isbn13 = false, goodreads_id = "1" }),
+            { goodreads_id = "2", title = "Something Else", authors = { "Other" } },
+        })
+        assert_equal(0, #Matcher.sameWorkEditions(ranked))
+        assert_true(ranked[1].score - ranked[2].score >= 15)
+        assert_true(Matcher.unambiguous(ranked))
+    end)
+
+    it("is unambiguous for a single confident match", function()
+        local ranked = Matcher.rank(identity({ isbn13 = false }), {
+            candidate({ isbn13 = false, goodreads_id = "1" }),
+        })
+        assert_equal("confirm", ranked[1].decision)
+        assert_true(Matcher.unambiguous(ranked))
+    end)
+
+    it("is never unambiguous for a weak match", function()
+        local ranked = Matcher.rank(identity({ isbn13 = false }), {
+            { goodreads_id = "1", title = "Something Else", authors = { "Other" } },
+        })
+        assert_equal("manual", ranked[1].decision)
+        assert_false(Matcher.unambiguous(ranked))
+    end)
+
+    it("reports no editions for a single candidate", function()
+        local ranked = Matcher.rank(identity(), { candidate() })
+        assert_equal(0, #Matcher.sameWorkEditions(ranked))
+    end)
+
+    it("treats a series-decorated Goodreads title as the same book", function()
+        local ranked = Matcher.rank(identity({ isbn13 = false }), {
+            candidate({ isbn13 = false, goodreads_id = "1",
+                title = "Sapiens (Sapiens, #1)" }),
+        })
+        assert_equal("confirm", ranked[1].decision)
+        assert_true(Matcher.unambiguous(ranked))
+    end)
+
+    it("does not treat a sequel as another edition", function()
+        local id = Identifiers.build(
+            { title = "Dune", authors = { "Frank Herbert" } }, nil)
+        local ranked = Matcher.rank(id, {
+            { goodreads_id = "1", title = "Dune (Dune, #1)",
+                authors = { "Frank Herbert" } },
+            { goodreads_id = "2", title = "Dune Messiah (Dune, #2)",
+                authors = { "Frank Herbert" } },
+        })
+        assert_equal("1", ranked[1].goodreads_id)
+        assert_equal(0, #Matcher.sameWorkEditions(ranked))
+        assert_true(ranked[1].score - ranked[2].score >= 15)
+        assert_true(Matcher.unambiguous(ranked))
+    end)
 end)

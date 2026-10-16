@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Right edition, not just the first hit.** When a search returns several editions of one book, the plugin now shows them to choose from instead of silently linking the first result. The picker shows what tells editions apart - page count, plus the ISBN/ASIN when the search carried one - and marks a candidate that matched the file's own identifier. If a file's ISBN/ASIN finds nothing on Goodreads, the plugin falls back to a title/author search so there is still a list to pick from, and a weak match is never linked on its own.
+
 ## [2.0.4] - 2026-10-16
 
 Android sign-in works now, and the diagnostic report explains itself.

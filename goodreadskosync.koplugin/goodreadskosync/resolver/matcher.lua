@@ -202,6 +202,52 @@ function Matcher.bestAutomatic(ranked)
     return best
 end
 
+-- How far the best candidate must stand ahead of the runner-up before it can be
+-- linked without asking. Editions of one work routinely share a title and
+-- author, so anything less than a clear lead means the user should choose.
+local AMBIGUITY_MARGIN = 15
+
+-- Candidates that look like other editions of the same work as the best match:
+-- a different book with the same title and primary author. Distinguishes "one
+-- clear result" from "these are all the same book, pick one".
+function Matcher.sameWorkEditions(ranked)
+    local out = {}
+    if type(ranked) ~= "table" or #ranked < 2 then return out end
+    local best = ranked[1]
+    local best_author = candidateAuthors(best)[1]
+    for i = 2, #ranked do
+        local candidate = ranked[i]
+        if tostring(candidate.goodreads_id) ~= tostring(best.goodreads_id)
+            and titleSimilarity(best.title, candidate.title) >= 0.85
+            and authorSimilarity(best_author, candidateAuthors(candidate)[1]) >= 0.6 then
+            out[#out + 1] = candidate
+        end
+    end
+    return out
+end
+
+-- Whether the best candidate can be linked silently.
+--
+-- A candidate that matched a hard identifier (the file's ISBN, ASIN or
+-- Goodreads id) pins the exact edition, so it is safe - unless another
+-- candidate matched just as strongly, in which case they cannot be told apart.
+-- Without an identifier match, the best candidate is only safe when it stands
+-- clearly ahead of the runner-up and no other candidate is another edition of
+-- the same work.
+function Matcher.unambiguous(ranked, margin)
+    if type(ranked) ~= "table" or #ranked == 0 then return false end
+    local best, second = ranked[1], ranked[2]
+    -- A weak match is never linked silently, even when it is the only candidate.
+    if best.decision == "manual" then return false end
+    if best.has_identifier_match then
+        return not (second and second.has_identifier_match and second.score >= best.score)
+    end
+    if second and (best.score - second.score) < (margin or AMBIGUITY_MARGIN) then
+        return false
+    end
+    return #Matcher.sameWorkEditions(ranked) == 0
+end
+
 Matcher._similarity = similarity
 Matcher._titleSimilarity = titleSimilarity
 Matcher._authorSimilarity = authorSimilarity

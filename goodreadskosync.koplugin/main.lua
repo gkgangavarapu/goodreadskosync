@@ -488,7 +488,7 @@ function Goodreads:_handleResolution(result, identity, metadata, filename, choos
         if has_candidates then
             IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
                 self:confirmMapping(result, candidate)
-            end, function() self:promptFindBook() end)
+            end, function() self:promptFindBook() end, { ambiguous = result.ambiguous })
         else
             self:showUnidentified(identity, metadata, filename)
         end
@@ -501,12 +501,14 @@ function Goodreads:_handleResolution(result, identity, metadata, filename, choos
         Widgets.notify(_("Already linked"), 3, "book")
     elseif (result.status == "confirm" or result.status == "manual")
         and has_candidates then
-        if self:getSetting("auto_link") then
+        -- Several editions of one work (or a near tie) must not be linked
+        -- silently: the user picks. `auto_link` only covers a clear result.
+        if self:getSetting("auto_link") and not result.ambiguous then
             self:linkCandidate(result, result.candidates[1])
         else
             IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
                 self:confirmMapping(result, candidate)
-            end, function() self:promptFindBook() end)
+            end, function() self:promptFindBook() end, { ambiguous = result.ambiguous })
         end
     elseif result.status == "error" then
         Widgets.notify(_("No network · will retry"), 3, "warn")
@@ -585,7 +587,7 @@ function Goodreads:_searchManual(metadata, filename, query)
     if result.candidates and #result.candidates > 0 then
         IdentifyUI.showCandidates(identity, result.candidates, function(candidate)
             self:confirmMapping(result, candidate)
-        end, function() self:promptFindBook() end)
+        end, function() self:promptFindBook() end, { ambiguous = result.ambiguous })
     else
         Widgets.message(_("No matches found."))
     end

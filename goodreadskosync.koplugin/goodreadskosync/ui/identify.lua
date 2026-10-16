@@ -11,11 +11,16 @@ local Widgets = require("goodreadskosync.ui.widgets")
 
 local Identify = {}
 
--- Show the candidate list for a resolution result.
-function Identify.showCandidates(identity, candidates, on_select, on_manual_search)
-    local title = _("Goodreads KO Sync\nWhich book is this?")
+-- Show the candidate list for a resolution result. `opts.ambiguous` marks a list
+-- that is most likely editions of one work, so the prompt asks which edition.
+function Identify.showCandidates(identity, candidates, on_select, on_manual_search, opts)
+    opts = opts or {}
+    local heading = opts.ambiguous
+        and _("Which edition is this?")
+        or _("Which book is this?")
+    local title = _("Goodreads KO Sync") .. "\n" .. heading
     if identity and identity.title then
-        title = string.format(_("Goodreads KO Sync\n%s"), identity.title)
+        title = title .. "\n" .. identity.title
     end
     Widgets.candidateDialog(candidates, on_select, {
         title = title,

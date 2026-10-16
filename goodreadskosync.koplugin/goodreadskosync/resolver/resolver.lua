@@ -97,6 +97,7 @@ function Resolver.resolve(opts)
             candidates = ranked,
             selected = best,
             query = query,
+            ambiguous = false,
         }
     end
 
@@ -107,6 +108,10 @@ function Resolver.resolve(opts)
             local_key = local_key,
             candidates = ranked,
             query = query,
+            -- Whether the top candidate is safe to link without asking. The UI
+            -- honours this when auto_link is on, so several editions of one work
+            -- are always presented for the user to choose (see Matcher.unambiguous).
+            ambiguous = not Matcher.unambiguous(ranked),
         }
     end
 

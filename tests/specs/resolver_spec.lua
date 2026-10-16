@@ -123,4 +123,80 @@ describe("resolver.resolver", function()
         assert_true(record.confirmed)
         assert_equal("Yuval Noah Harari", record.author)
     end)
+
+    it("marks several editions of one work as ambiguous", function()
+        local result = Resolver.resolve({
+            metadata = { title = "Dune", authors = { "Frank Herbert" } },
+            provider = fakeProvider({
+                { goodreads_id = "1", title = "Dune", authors = { "Frank Herbert" } },
+                { goodreads_id = "2", title = "Dune", authors = { "Frank Herbert" } },
+            }),
+            no_cache = true,
+        })
+        assert_true(result.ambiguous)
+    end)
+
+    it("does not mark a single clear match as ambiguous", function()
+        local result = Resolver.resolve({
+            metadata = { title = "Dune", authors = { "Frank Herbert" } },
+            provider = fakeProvider({
+                { goodreads_id = "1", title = "Dune", authors = { "Frank Herbert" } },
+                { goodreads_id = "2", title = "Something Else", authors = { "Other" } },
+            }),
+            no_cache = true,
+        })
+        assert_false(result.ambiguous)
+    end)
+
+    it("does not mark an identifier match as ambiguous", function()
+        local result = Resolver.resolve({
+            metadata = sapiens,
+            provider = fakeProvider({
+                { goodreads_id = "23692271", title = "Sapiens",
+                    authors = { "Yuval Noah Harari" }, isbn13 = "9780062316097" },
+                { goodreads_id = "2", title = "Sapiens",
+                    authors = { "Yuval Noah Harari" } },
+            }),
+            no_cache = true,
+        })
+        assert_equal("auto", result.status)
+        assert_false(result.ambiguous)
+        assert_equal("23692271", result.selected.goodreads_id)
+    end)
+
+    it("builds a title query for the fallback", function()
+        assert_equal("Sapiens Yuval Noah Harari",
+            Search.buildTitleQuery({ title = "Sapiens", primary_author = "Yuval Noah Harari" }))
+        assert_equal("Sapiens", Search.buildTitleQuery({ title = "Sapiens" }))
+        assert_equal("", Search.buildTitleQuery({}))
+    end)
+
+    it("falls back to a title search when an identifier finds nothing", function()
+        local asked = {}
+        local provider = {
+            search_books = function(_, query)
+                asked[#asked + 1] = query
+                if query == "9780062316097" then return {} end
+                return { { goodreads_id = "23692271", title = "Sapiens",
+                    authors = { "Yuval Noah Harari" } } }
+            end,
+        }
+        local result = Resolver.resolve({
+            metadata = sapiens, provider = provider, no_cache = true,
+        })
+        assert_equal("9780062316097", asked[1])
+        assert_equal("Sapiens Yuval Noah Harari", asked[2])
+        assert_equal(1, #result.candidates)
+    end)
+
+    it("does not fall back when the query was given explicitly", function()
+        local calls = 0
+        local provider = {
+            search_books = function() calls = calls + 1; return {} end,
+        }
+        Resolver.resolve({
+            metadata = sapiens, provider = provider, no_cache = true, query = "no such book",
+        })
+        assert_equal(1, calls)
+    end)
 end)
