@@ -8,7 +8,7 @@ the resolver and sync engine remain usable from unit tests without KOReader.
 --]]
 
 local Constants = {
-    VERSION = "2.0.3",
+    VERSION = "2.0.4",
 
     -- Update channel. "stable" follows published (non-prerelease) releases;
     -- "dev" follows dev-branch releases (incl. prereleases). The release

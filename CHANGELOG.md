@@ -4,17 +4,13 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.4] - 2026-10-16
 
-Android support, and a report that explains itself.
+Android sign-in works now, and the diagnostic report explains itself.
 
-- **Fix: sign-in now completes on Android.** The plugin encrypts the saved session (and the remembered password) with libcrypto. On Android no reachable library exports those functions - the handle loads but every call raises `undefined symbol: RAND_bytes` - and because the login flow saves the session the moment Goodreads accepts it, that exception turned a **successful** sign-in into a reported failure. It looked like this: Goodreads emails you that a new device logged in, but the plugin says the login failed. The module now probes the library once, treats an unusable one as "no crypto", and guards every call so it can never raise; the session and password then fall back to plaintext there, which is what that module always documented. Kindle behaviour is unchanged.
-- **Writing plugin state no longer depends on a shell.** Storage, the diagnostic log and the cover cache now create their directories with KOReader's own `util.makePath` instead of shelling out to `mkdir`, so saving mappings, the queue, the session or the login trace cannot fail because a build has no usable shell or `mkdir` on `PATH` (the cover cache in particular used a Linux-only `mkdir -p`).
-- **Android is now covered by the test suite.** An emulated Android environment (external-storage data directory, a non-Kindle device, clipboard via the Android bridge, no KOReader `crash.log`) runs in CI, so where the plugin writes its files, which backend it picks and what the doctor reports on a phone are pinned by tests rather than assumed.
-- **The Android tests also cover state and the Kindle-only paths.** The suite round-trips the on-disk state (book mappings, sync queue, saved session, remembered credentials) and the cover-cache location, and checks that Kindle-only code stays put: the native-Kindle provider refuses to act on a non-Kindle device, and the browser falls back to the built-in engine when the Kindle NetSurf helper is absent.
-- **Connection doctor: new "Secure connection" check.** It reports whether this device's KOReader has the modules an https request needs (`ssl.https`/LuaSec, `socket.http`, `ltn12`), and names any that are missing. That is the first thing to look at when sign-in fails on one device but works on another, and it is in the exported report too.
-- **The report says where its files are.** A new "platform" section lists the plugin's data directory, whether a KOReader crash log exists, and the https summary. Android has no `crash.log` (the app logs to logcat), so a report from a phone now says `crash_log=missing` instead of quietly leaving the section out.
-- **Fix: a build without `LuaSettings` no longer breaks storage.** The optional-module probe took the error message from a failed `require` as the module itself, so any KOReader that lacks `LuaSettings` failed on the first settings write instead of falling back to the built-in serializer.
+- **Sign-in on Android completes.** The plugin saves your session the moment Goodreads accepts it, and on Android the crypto library it used raised instead of falling back, so a successful sign-in was reported as a failure - Goodreads would email "a new device logged in" while the plugin said the login failed. Crypto failures now fall back to plaintext (Android has no OS keystore) instead of breaking the login. Kindle behaviour is unchanged.
+- **Connection doctor: new "Secure connection" check**, and the exported report gained a **"platform" section** (where the plugin keeps its files, whether a KOReader crash log exists). Handy when a report comes from a phone.
+- **Saving plugin state no longer depends on a shell.** The settings folder, the diagnostic log and the cover cache are created with KOReader's own `util.makePath` instead of `mkdir`.
 
 ## [2.0.3] - 2026-10-15
 
