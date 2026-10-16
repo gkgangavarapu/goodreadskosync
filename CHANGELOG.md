@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6] - 2026-10-16
+
+- **Noticeably lighter on slow devices.** The plugin re-read and re-parsed its state files on every access - book mappings on every page turn, sync state on every progress tick. Those stores are now kept in memory. On a PW3, 200 mapping lookups went from 0.98s to 0.001s, and 200 sync-state reads from 0.91s to 0.006s.
+- **The Tools menu entry shows how fresh your data is**, e.g. "Goodreads KO Sync · synced 5 min ago".
+
 ## [2.0.5] - 2026-10-16
 
 - **The right edition, not just the first hit.** When a search returns several editions of one book, the plugin now shows them to pick from instead of silently linking the first result. The list shows what tells editions apart - page count, and the ISBN/ASIN when the search carried one - and marks the one that matched your file's identifier. A file's ISBN or ASIN is preferred when matching; if it finds nothing on Goodreads, the plugin falls back to a title/author search so there is still a list to choose from, and a weak match is never linked on its own.
