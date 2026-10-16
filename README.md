@@ -4,13 +4,9 @@ Sync your KOReader reading progress with Goodreads.
 
 ### Support the project
 
-If Goodreads KO Sync is useful to you, consider supporting its development:
+If Goodreads KO Sync is useful to you, consider supporting its development: **[Buy Me a Coffee](https://buymeacoffee.com/gkgangavarapu)** — it helps with development, maintenance, bug fixes, and keeping the plugin working as Goodreads changes.
 
-**[Buy Me a Coffee](https://buymeacoffee.com/gkgangavarapu)**
-
-Your support helps with development, maintenance, bug fixes, and keeping the plugin working as Goodreads changes.
-
-A Community KOReader plugin. Install it manually from [Releases](https://github.com/gkgangavarapu/goodreadskosync/releases).
+A community KOReader plugin. Install it manually from [Releases](https://github.com/gkgangavarapu/goodreadskosync/releases).
 
 ## New in 2.0 — native Goodreads UI (browser-free)
 
@@ -50,9 +46,7 @@ Found a bug or have a feature request? **[Open an issue on GitHub](https://githu
 
 Please include a diagnostic report: open the plugin's **Menu** tab, then **Diagnostics > Export diagnostic log**. It writes a single file (path shown on screen) into the plugin's settings folder — `koreader/settings/goodreadskosync/` over USB — with your connection checks, settings and recent activity, and no credentials. On Android the same file lands under `/sdcard/koreader/settings/goodreadskosync/`.
 
-If you enjoy using the plugin, the best way to support continued development is:
-
-**[Buy Me a Coffee](https://buymeacoffee.com/gkgangavarapu)**
+If you enjoy using the plugin, the best way to support continued development is: **[Buy Me a Coffee](https://buymeacoffee.com/gkgangavarapu)**
 
 ## Important
 
