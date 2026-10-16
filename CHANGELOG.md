@@ -6,6 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- **A support reminder you can act on.** After a successful sync the plugin occasionally asks whether you would like to support the project - at most once a day, and otherwise only after ten successful syncs or three days, never on the first sync. Its button opens the support dialog with the QR code, rather than a toast you cannot tap. Support is also reachable straight from the reader menu (**Tools > Support Goodreads KO Sync**). The "support tips" toggle in Settings still turns it off.
 - **Right edition, not just the first hit.** When a search returns several editions of one book, the plugin now shows them to choose from instead of silently linking the first result. The picker shows what tells editions apart - page count, plus the ISBN/ASIN when the search carried one - and marks a candidate that matched the file's own identifier. If a file's ISBN/ASIN finds nothing on Goodreads, the plugin falls back to a title/author search so there is still a list to pick from, and a weak match is never linked on its own.
 
 ## [2.0.4] - 2026-10-16

@@ -135,9 +135,13 @@ local Constants = {
     -- Background update check interval, in seconds (about once a day).
     UPDATE_CHECK_INTERVAL = 24 * 60 * 60,
 
-    -- Minimum gap between the low-key "support the project" toasts shown after
-    -- a successful sync, in seconds (about once every two weeks).
-    SUPPORT_TOAST_INTERVAL = 14 * 24 * 60 * 60,
+    -- "Support this project" reminder, shown after a successful sync. It never
+    -- repeats within MIN_GAP, and otherwise waits until either SYNCS syncs or
+    -- INTERVAL has passed since the last reminder - so a heavy user is nudged
+    -- after a run of syncs and a light one after a few days.
+    SUPPORT_REMINDER_MIN_GAP = 24 * 60 * 60,
+    SUPPORT_REMINDER_INTERVAL = 3 * 24 * 60 * 60,
+    SUPPORT_REMINDER_SYNCS = 10,
 
     -- Search cache lifetime, in seconds (7 days).
     SEARCH_CACHE_TTL = 7 * 24 * 60 * 60,

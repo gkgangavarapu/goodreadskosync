@@ -101,10 +101,11 @@ function Widgets.setGlyphStyle(style)
     return ToastGlyphs.setStyle(style)
 end
 
-function Widgets.confirm(text, on_ok, ok_text)
+function Widgets.confirm(text, on_ok, ok_text, cancel_text)
     UIManager:show(ConfirmBox:new{
         text = text,
         ok_text = ok_text or _("OK"),
+        cancel_text = cancel_text or _("Cancel"),
         ok_callback = on_ok,
     })
 end

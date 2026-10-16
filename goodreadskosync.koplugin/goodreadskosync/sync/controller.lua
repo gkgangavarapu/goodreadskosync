@@ -588,7 +588,7 @@ function Controller:syncSilently(opts)
             self:setSetting("last_sync_error", "")
             self:setSetting("last_sync_error_at", 0)
             self:maybePromptRating(summary)
-            self:maybeSupportToast()
+            self:maybeSupportReminder()
         end
         if summary.queued_failed and summary.queued_failed > 0 then
             self:_notifyQueuedFailure(summary.queued_failed)
@@ -604,19 +604,38 @@ function Controller:syncSilently(opts)
     end)
 end
 
--- Occasional, low-key reminder that the project can be supported. Shown at
--- most once every SUPPORT_TOAST_INTERVAL, a few seconds after a successful
--- sync so it never competes with the sync toast itself.
-function Controller:maybeSupportToast()
+-- Occasional, low-key reminder that the project can be supported. Decided by
+-- goodreadskosync.support_reminder (rare, and never on the first sync), shown a
+-- few seconds after a successful sync so it never competes with the sync
+-- message. It asks rather than tells: the button opens the support dialog with
+-- the QR code, because a toast cannot be tapped.
+function Controller:maybeSupportReminder()
     if self:getSetting("support_tips") == false then return end
-    local now = os.time()
-    local last = tonumber(self:getSetting("support_toast_at")) or 0
-    if now - last < Constants.SUPPORT_TOAST_INTERVAL then return end
-    self:setSetting("support_toast_at", now)
+    local SupportReminder = require("goodreadskosync.support_reminder")
+    local stored_last = tonumber(self:getSetting("support_reminder_at")) or 0
+    local stored_syncs = self:getSetting("support_reminder_syncs")
+    local due, next_state = SupportReminder.evaluate({
+        last_at = stored_last,
+        syncs = self:getSetting("support_sync_count"),
+        syncs_at_last = stored_syncs,
+    })
+    self:setSetting("support_sync_count", next_state.syncs)
+    if next_state.last_at ~= stored_last then
+        self:setSetting("support_reminder_at", next_state.last_at)
+    end
+    local next_syncs = next_state.syncs_at_last
+    if next_syncs ~= (tonumber(stored_syncs) or 0) then
+        self:setSetting("support_reminder_syncs", next_syncs)
+    end
+    if not due then return end
+
     UIManager:scheduleIn(5, function()
-        Widgets.notify(
-            _("Enjoying Goodreads KO Sync? You can support its development from the menu."),
-            5, "heart")
+        local ok, Support = pcall(require, "goodreadskosync.ui.support")
+        if not (ok and Support and Support.show) then return end
+        Widgets.confirm(
+            _("Enjoying Goodreads KO Sync? You can support its continued development."),
+            function() Support.show() end,
+            _("Support"), _("Not now"))
     end)
 end
 
@@ -645,7 +664,7 @@ function Controller:_reportSyncSummary(summary)
                 or _("Already up to date"), { kind = "info", timeout = 4 })
         end
         self:maybePromptRating(summary)
-        self:maybeSupportToast()
+        self:maybeSupportReminder()
     else
         self:setSetting("last_sync_error", summary.error or Constants.ERROR.SERVER_ERROR)
         self:setSetting("last_sync_error_at", os.time())

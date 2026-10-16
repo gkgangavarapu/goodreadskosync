@@ -1711,6 +1711,15 @@ function Goodreads:addToMainMenu(menu_items)
             require("goodreadskosync.ui.native").show(self)
         end,
     }
+    -- Also reachable straight from the reader menu, so supporting the project
+    -- does not require opening the plugin window first.
+    menu_items.goodreads_support = {
+        text = _("Support Goodreads KO Sync"),
+        sorting_hint = "tools",
+        callback = function()
+            require("goodreadskosync.ui.support").show()
+        end,
+    }
 end
 
 -- Account submenu, rebuilt each time it is opened so it reflects the current
