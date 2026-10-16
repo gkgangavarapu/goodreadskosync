@@ -4,7 +4,9 @@ Sync your KOReader reading progress with Goodreads.
 
 ### Support the project
 
-If Goodreads KO Sync is useful to you, consider supporting its development: **[Buy Me a Coffee](https://buymeacoffee.com/gkgangavarapu)** — it helps with development, maintenance, bug fixes, and keeping the plugin working as Goodreads changes.
+If Goodreads KO Sync is useful to you, consider supporting its development — it helps with development, maintenance, bug fixes, and keeping the plugin working as Goodreads changes.
+
+[![Buy Me a Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://buymeacoffee.com/gkgangavarapu)
 
 A community KOReader plugin. Install it manually from [Releases](https://github.com/gkgangavarapu/goodreadskosync/releases).
 
