@@ -107,7 +107,11 @@ end
 
 function Store:flush()
     if not self.dirty then return true end
-    local ok
+    -- LuaSettings:flush writes the file itself and does not create parent
+    -- directories; a missing settings folder makes that write fail. The
+    -- fallback backend creates the folder in _writeFile.
+    Fs.makeDir(self.dir)
+    local ok, err
     if self.ls then
         -- LuaSettings keeps every key it has ever saved, so a deleted key must
         -- be explicitly removed or it reappears the next time the file is read.
@@ -121,7 +125,10 @@ function Store:flush()
         for k, v in pairs(self.data) do
             self.ls:saveSetting(k, v)
         end
-        ok = pcall(function() self.ls:flush() end)
+        ok, err = pcall(function() self.ls:flush() end)
+        if not ok then
+            Logging.warn("storage: flush failed for", self.path, err)
+        end
     else
         ok = self:_writeFile()
     end
@@ -152,7 +159,11 @@ function Store:_writeFile()
     return ok and true or false
 end
 
-local function fallback_store(path)
+local function dir_of(path)
+    return path:match("^(.*)[/\\][^/\\]*$") or "."
+end
+
+local function load_file(path)
     local data = {}
     local file = io.open(path, "r")
     if file then
@@ -164,33 +175,59 @@ local function fallback_store(path)
             if ok and type(loaded) == "table" then data = loaded end
         end
     end
-    local dir = path:match("^(.*)[/\\][^/\\]*$") or "."
+    return data
+end
+
+local function materialize_ls(ls)
+    local data = {}
+    -- LuaSettings stores a flat table; materialize it for a uniform interface.
+    if ls and ls.data then
+        for k, v in pairs(ls.data) do data[k] = v end
+    end
+    return data
+end
+
+local function fallback_store(path)
     return setmetatable({
-        data = data,
+        data = load_file(path),
         path = path,
-        dir = dir,
+        dir = dir_of(path),
         dirty = false,
     }, Store)
 end
 
 -- Wrap a LuaSettings-like object (or a fake one in tests) in the Store API.
 function Storage._open_luasettings(path, ls)
-    local data = {}
-    -- LuaSettings stores a flat table; materialize it for a uniform interface.
-    if ls and ls.data then
-        for k, v in pairs(ls.data) do data[k] = v end
-    end
     return setmetatable({
-        data = data,
+        data = materialize_ls(ls),
         path = path,
-        dir = path:match("^(.*)[/\\][^/\\]*$") or ".",
+        dir = dir_of(path),
         ls = ls,
         dirty = false,
     }, Store)
 end
 
 local function luasettings_store(path)
+    Fs.makeDir(dir_of(path))
     return Storage._open_luasettings(path, LuaSettings:open(path))
+end
+
+-- Re-read this store from disk in place, so held references (the plugin's
+-- settings_store, a Session store opened before a forked login, ...) see
+-- writes made by a background subprocess. Unsaved in-memory changes are
+-- discarded: after a fork, the child's file is the source of truth.
+function Store:_reloadFromDisk()
+    if self.dirty then
+        Logging.warn("storage: discarding unsaved changes before reload", self.path)
+    end
+    if self.ls and LuaSettings and type(LuaSettings.open) == "function" then
+        self.ls = LuaSettings:open(self.path)
+        self.data = materialize_ls(self.ls)
+    else
+        self.data = load_file(self.path)
+    end
+    self.dirty = false
+    self.deleted = nil
 end
 
 --------------------------------------------------------------------------------
@@ -214,18 +251,32 @@ end
 -- Opened stores are cached per path. Every `open()` used to read and parse the
 -- file again, and the hot paths - sync state on each progress tick, mappings on
 -- each page turn, the queue while draining - opened theirs constantly, which is
--- pure filesystem work on a slow device. `clearCache()` is for tests that need
--- the next open to come from disk (nothing else changes these files behind us).
+-- pure filesystem work on a slow device. `clearCache()` drops the table so the
+-- next open comes from disk (used by tests). `reload()` re-reads into the
+-- already-open objects: a forked background task can write session.lua (and
+-- other stores) while the parent still holds the pre-fork copies, and flushing
+-- those copies would overwrite the child's writes.
 local open_cache = {}
 
 function Storage.clearCache()
     open_cache = {}
 end
 
+function Storage.reload()
+    for _, store in pairs(open_cache) do
+        store:_reloadFromDisk()
+    end
+end
+
 function Storage.open(name)
     local path = Storage.getBaseDir() .. "/" .. name .. ".lua"
     local cached = open_cache[path]
     if cached then return cached end
+
+    -- LuaSettings:flush does not create parent directories, so a fresh install
+    -- (no settings/goodreadskosync yet) would fail the first save. Create it
+    -- up front for both backends.
+    Fs.makeDir(Storage.getBaseDir())
 
     local store
     if LuaSettings and not base_dir_override then
