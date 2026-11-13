@@ -9,6 +9,7 @@ can't be dismissed by a tap. Both serialize results across the fork boundary.
 --]]
 
 local Logging = require("goodreadskosync.logging")
+local Storage = require("goodreadskosync.storage")
 local UIManager = require("ui/uimanager")
 
 local Tasks = {}
@@ -31,6 +32,11 @@ function Tasks.run(text, task)
     local ok, Trapper = pcall(require, "ui/trapper")
     if ok and Trapper and type(Trapper.dismissableRunInSubprocess) == "function" then
         local completed, a, b, c = Trapper:dismissableRunInSubprocess(task, text)
+        -- The child process may have written session.lua / account.lua / etc.
+        -- Reload the parent's cached stores so Account status (and anything
+        -- else) sees those writes, and so a later flush cannot overwrite them
+        -- with the pre-fork in-memory copies.
+        Storage.reload()
         return completed, a, b, c
     end
     local ok2, a, b, c = pcall(task)
@@ -97,6 +103,7 @@ function Tasks.runSilent(task)
             break
         end
     end
+    Storage.reload()
     if ret_values then
         return completed, unpack(ret_values, 1, ret_values.n)
     end
